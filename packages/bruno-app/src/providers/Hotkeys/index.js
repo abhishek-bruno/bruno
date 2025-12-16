@@ -14,8 +14,8 @@ import {
   saveFolderRoot,
   saveCollectionSettings
 } from 'providers/ReduxStore/slices/collections/actions';
-import { findCollectionByUid, findItemInCollection } from 'utils/collections';
-import { closeTabs, reorderTabs, switchTab } from 'providers/ReduxStore/slices/tabs';
+import { findCollectionByUid, findItemInCollection, findItemOrTransientInCollection } from 'utils/collections';
+import { closeTabs, reorderTabs, switchTab, triggerSaveTransientModal } from 'providers/ReduxStore/slices/tabs';
 import { toggleSidebarCollapse } from 'providers/ReduxStore/slices/app';
 import { getKeyBindingsForActionAllOS } from './keyMappings';
 
@@ -51,8 +51,12 @@ export const HotkeysProvider = (props) => {
         if (activeTab) {
           const collection = findCollectionByUid(collections, activeTab.collectionUid);
           if (collection) {
-            const item = findItemInCollection(collection, activeTab.uid);
-            if (item && item.uid) {
+            // Check for transient items first
+            const item = findItemOrTransientInCollection(collection, activeTab.uid);
+            if (item && item.transient) {
+              // For transient items, trigger the save modal
+              dispatch(triggerSaveTransientModal({ uid: activeTab.uid }));
+            } else if (item && item.uid) {
               if (activeTab.type === 'folder-settings') {
                 dispatch(saveFolderRoot(collection.uid, item.uid));
               } else {
@@ -81,7 +85,7 @@ export const HotkeysProvider = (props) => {
         const collection = findCollectionByUid(collections, activeTab.collectionUid);
 
         if (collection) {
-          const item = findItemInCollection(collection, activeTab.uid);
+          const item = findItemOrTransientInCollection(collection, activeTab.uid);
           if (item) {
             if (item.type === 'grpc-request') {
               const request = item.draft ? item.draft.request : item.request;

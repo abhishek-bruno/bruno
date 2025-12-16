@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { requestUrlChanged, updateRequestMethod, updateRequestProtoPath } from 'providers/ReduxStore/slices/collections';
 import { saveRequest, generateGrpcurlCommand } from 'providers/ReduxStore/slices/collections/actions';
+import { triggerSaveTransientModal } from 'providers/ReduxStore/slices/tabs';
 import { useTheme } from 'providers/Theme';
 import SingleLineEditor from 'components/SingleLineEditor/index';
 import { isMacOS } from 'utils/common/platform';
@@ -85,7 +86,11 @@ const GrpcQueryUrl = ({ item, collection, handleRun }) => {
   const isClientStreamingMethod = selectedGrpcMethod && selectedGrpcMethod.type && CLIENT_STREAMING_METHOD_TYPES.includes(selectedGrpcMethod.type);
 
   const onSave = () => {
-    dispatch(saveRequest(item.uid, collection.uid));
+    if (item.transient) {
+      dispatch(triggerSaveTransientModal({ uid: item.uid }));
+    } else {
+      dispatch(saveRequest(item.uid, collection.uid));
+    }
   };
 
   const onUrlChange = (value) => {

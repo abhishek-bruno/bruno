@@ -120,6 +120,22 @@ export const findItemInCollection = (collection, itemUid) => {
   return findItem(flattenedItems, itemUid);
 };
 
+/**
+ * Find an item in a collection, checking both regular items and transient items.
+ * @param {Object} collection - The collection to search in
+ * @param {string} itemUid - The UID of the item to find
+ * @returns {Object|undefined} - The found item or undefined
+ */
+export const findItemOrTransientInCollection = (collection, itemUid) => {
+  // First check regular items
+  const item = findItemInCollection(collection, itemUid);
+  if (item) return item;
+
+  // Then check transient items (stored in collection.transientItems)
+  const transientItems = collection?.transientItems || [];
+  return transientItems.find((i) => i.uid === itemUid);
+};
+
 export const findParentItemInCollection = (collection, itemUid) => {
   let flattenedItems = flattenItems(collection.items);
 

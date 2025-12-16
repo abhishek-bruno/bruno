@@ -1,13 +1,13 @@
 import React, { useCallback, useState, useRef, Fragment, useMemo, useEffect } from 'react';
 import get from 'lodash/get';
-import { closeTabs, makeTabPermanent } from 'providers/ReduxStore/slices/tabs';
+import { closeTabs, makeTabPermanent, clearSaveTransientModal } from 'providers/ReduxStore/slices/tabs';
 import { saveRequest, saveCollectionRoot, saveFolderRoot } from 'providers/ReduxStore/slices/collections/actions';
-import { deleteRequestDraft, deleteCollectionDraft, deleteFolderDraft } from 'providers/ReduxStore/slices/collections';
+import { deleteRequestDraft, deleteCollectionDraft, deleteFolderDraft, removeTransientItem } from 'providers/ReduxStore/slices/collections';
 import { useTheme } from 'providers/Theme';
 import { useDispatch } from 'react-redux';
 import darkTheme from 'themes/dark';
 import lightTheme from 'themes/light';
-import { findItemInCollection, hasRequestChanges } from 'utils/collections';
+import { findItemInCollection, findItemOrTransientInCollection, hasRequestChanges } from 'utils/collections';
 import ConfirmRequestClose from './ConfirmRequestClose';
 import ConfirmCollectionClose from './ConfirmCollectionClose';
 import ConfirmFolderClose from './ConfirmFolderClose';
@@ -21,6 +21,7 @@ import GradientCloseButton from './GradientCloseButton';
 import { flattenItems } from 'utils/collections/index';
 import { closeWsConnection } from 'utils/network/index';
 import ExampleTab from '../ExampleTab';
+import SaveTransientRequest from './SaveTransientRequest/index';
 
 const RequestTab = ({ tab, collection, tabIndex, collectionRequestTabs, folderUid, hasOverflow, setHasOverflow }) => {
   const dispatch = useDispatch();
@@ -31,11 +32,21 @@ const RequestTab = ({ tab, collection, tabIndex, collectionRequestTabs, folderUi
   const [showConfirmClose, setShowConfirmClose] = useState(false);
   const [showConfirmCollectionClose, setShowConfirmCollectionClose] = useState(false);
   const [showConfirmFolderClose, setShowConfirmFolderClose] = useState(false);
+  const [showSaveTransientModal, setShowSaveTransientModal] = useState(false);
 
   const dropdownTippyRef = useRef();
   const onDropdownCreate = (ref) => (dropdownTippyRef.current = ref);
 
-  const item = findItemInCollection(collection, tab.uid);
+  const item = findItemOrTransientInCollection(collection, tab.uid);
+  const isTransient = item?.transient === true;
+
+  // Listen for the Redux trigger to show save modal (from Cmd+S)
+  useEffect(() => {
+    if (tab.showSaveTransientModal && isTransient) {
+      setShowSaveTransientModal(true);
+      dispatch(clearSaveTransientModal({ uid: tab.uid }));
+    }
+  }, [tab.showSaveTransientModal, isTransient, dispatch, tab.uid]);
 
   const method = useMemo(() => {
     if (!item) return;
@@ -266,32 +277,38 @@ const RequestTab = ({ tab, collection, tabIndex, collectionRequestTabs, folderUi
           onCancel={() => setShowConfirmClose(false)}
           onCloseWithoutSave={() => {
             isWS && closeWsConnection(item.uid);
-            dispatch(
-              deleteRequestDraft({
-                itemUid: item.uid,
-                collectionUid: collection.uid
-              })
-            );
-            dispatch(
-              closeTabs({
-                tabUids: [tab.uid]
-              })
-            );
+            if (isTransient) {
+              // For transient items, remove from store and close tab
+              dispatch(removeTransientItem({ collectionUid: collection.uid, itemUid: item.uid }));
+              dispatch(closeTabs({ tabUids: [tab.uid] }));
+            } else {
+              // For regular items, delete draft and close tab
+              dispatch(
+                deleteRequestDraft({
+                  itemUid: item.uid,
+                  collectionUid: collection.uid
+                })
+              );
+              dispatch(closeTabs({ tabUids: [tab.uid] }));
+            }
             setShowConfirmClose(false);
           }}
           onSaveAndClose={() => {
-            dispatch(saveRequest(item.uid, collection.uid))
-              .then(() => {
-                dispatch(
-                  closeTabs({
-                    tabUids: [tab.uid]
-                  })
-                );
-                setShowConfirmClose(false);
-              })
-              .catch((err) => {
-                console.log('err', err);
-              });
+            if (isTransient) {
+              // For transient items, close confirm modal and open save-to-collection modal
+              setShowConfirmClose(false);
+              setShowSaveTransientModal(true);
+            } else {
+              // For regular items, save and close
+              dispatch(saveRequest(item.uid, collection.uid))
+                .then(() => {
+                  dispatch(closeTabs({ tabUids: [tab.uid] }));
+                  setShowConfirmClose(false);
+                })
+                .catch((err) => {
+                  console.log('err', err);
+                });
+            }
           }}
         />
       )}
@@ -312,7 +329,11 @@ const RequestTab = ({ tab, collection, tabIndex, collectionRequestTabs, folderUi
         <span className="tab-method uppercase" style={{ color: getMethodColor(method) }}>
           {method}
         </span>
-        <span ref={tabNameRef} className="ml-1 tab-name" title={item.name}>
+        <span
+          ref={tabNameRef}
+          className={`ml-1 tab-name ${isTransient ? 'text-muted' : ''}`}
+          title={isTransient ? `${item.name} (unsaved)` : item.name}
+        >
           {item.name}
         </span>
         <RequestTabMenu
@@ -323,11 +344,35 @@ const RequestTab = ({ tab, collection, tabIndex, collectionRequestTabs, folderUi
           collection={collection}
           dropdownTippyRef={dropdownTippyRef}
           dispatch={dispatch}
+          isTransient={isTransient}
+          onSaveTransient={() => setShowSaveTransientModal(true)}
         />
       </div>
+      {showSaveTransientModal && (
+        <SaveTransientRequest
+          item={item}
+          collection={collection}
+          onClose={() => setShowSaveTransientModal(false)}
+        />
+      )}
       <GradientCloseButton
         hasChanges={hasChanges}
         onClick={(e) => {
+          // For transient items with changes, show the unsaved changes confirmation modal
+          if (isTransient && hasChanges) {
+            e.stopPropagation();
+            e.preventDefault();
+            setShowConfirmClose(true);
+            return;
+          }
+
+          // For transient items without changes, just discard
+          if (isTransient) {
+            isWS && closeWsConnection(item.uid);
+            dispatch(removeTransientItem({ collectionUid: collection.uid, itemUid: item.uid }));
+            return handleCloseClick(e);
+          }
+
           if (!hasChanges) {
             isWS && closeWsConnection(item.uid);
             return handleCloseClick(e);
@@ -342,13 +387,13 @@ const RequestTab = ({ tab, collection, tabIndex, collectionRequestTabs, folderUi
   );
 };
 
-function RequestTabMenu({ onDropdownCreate, collectionRequestTabs, tabIndex, collection, dropdownTippyRef, dispatch }) {
+function RequestTabMenu({ onDropdownCreate, collectionRequestTabs, tabIndex, collection, dropdownTippyRef, dispatch, isTransient, onSaveTransient }) {
   const [showCloneRequestModal, setShowCloneRequestModal] = useState(false);
   const [showAddNewRequestModal, setShowAddNewRequestModal] = useState(false);
 
   const totalTabs = collectionRequestTabs.length || 0;
   const currentTabUid = collectionRequestTabs[tabIndex]?.uid;
-  const currentTabItem = findItemInCollection(collection, currentTabUid);
+  const currentTabItem = findItemOrTransientInCollection(collection, currentTabUid);
   const currentTabHasChanges = useMemo(() => hasRequestChanges(currentTabItem), [currentTabItem]);
 
   const hasLeftTabs = tabIndex !== 0;
@@ -364,7 +409,15 @@ function RequestTabMenu({ onDropdownCreate, collectionRequestTabs, tabIndex, col
     }
 
     try {
-      const item = findItemInCollection(collection, tabUid);
+      const item = findItemOrTransientInCollection(collection, tabUid);
+
+      // For transient items, just close the tab and remove the transient item
+      if (item?.transient) {
+        dispatch(removeTransientItem({ collectionUid: collection.uid, itemUid: tabUid }));
+        dispatch(closeTabs({ tabUids: [tabUid] }));
+        return;
+      }
+
       // silently save unsaved changes before closing the tab
       if (hasRequestChanges(item)) {
         await dispatch(saveRequest(item.uid, collection.uid, true));
@@ -457,13 +510,25 @@ function RequestTabMenu({ onDropdownCreate, collectionRequestTabs, tabIndex, col
             dropdownTippyRef.current.hide();
             setShowCloneRequestModal(true);
           }}
+          disabled={isTransient}
         >
           Clone Request
         </button>
+        {isTransient && (
+          <button
+            className="dropdown-item w-full"
+            onClick={() => {
+              dropdownTippyRef.current.hide();
+              onSaveTransient?.();
+            }}
+          >
+            Save to Collection
+          </button>
+        )}
         <button
           className="dropdown-item w-full"
           onClick={handleRevertChanges}
-          disabled={!currentTabItem?.draft}
+          disabled={!currentTabItem?.draft || isTransient}
         >
           Revert Changes
         </button>
