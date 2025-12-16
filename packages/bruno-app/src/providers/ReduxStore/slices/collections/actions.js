@@ -55,11 +55,13 @@ import {
   addFolderVar,
   updateFolderVar,
   addCollectionVar,
-  updateCollectionVar
+  updateCollectionVar,
+  addTransientItem,
+  removeTransientItem
 } from './index';
 
 import { each } from 'lodash';
-import { closeAllCollectionTabs, updateResponsePaneScrollPosition } from 'providers/ReduxStore/slices/tabs';
+import { closeAllCollectionTabs, updateResponsePaneScrollPosition, closeTabs } from 'providers/ReduxStore/slices/tabs';
 import { removeCollectionFromWorkspace } from 'providers/ReduxStore/slices/workspaces';
 import { resolveRequestFilename } from 'utils/common/platform';
 import { interpolateUrl, parsePathParams, splitOnFirst } from 'utils/url/index';
@@ -1518,6 +1520,307 @@ export const newWsRequest = (params) => (dispatch, getState) => {
         resolve();
       })
       .catch(reject);
+  });
+};
+
+// Transient request actions - these create requests that live only in Redux until explicitly saved
+export const newTransientHttpRequest = (params) => (dispatch, getState) => {
+  const {
+    requestName,
+    requestType,
+    requestUrl,
+    requestMethod,
+    collectionUid,
+    headers,
+    body,
+    auth,
+    settings
+  } = params;
+
+  return new Promise((resolve, reject) => {
+    const state = getState();
+    const collection = findCollectionByUid(state.collections.collections, collectionUid);
+    if (!collection) {
+      return reject(new Error('Collection not found'));
+    }
+
+    const parts = splitOnFirst(requestUrl, '?');
+    const queryParams = parseQueryParams(parts[1]);
+    each(queryParams, (urlParam) => {
+      urlParam.enabled = true;
+      urlParam.type = 'query';
+    });
+
+    const pathParams = parsePathParams(requestUrl);
+    each(pathParams, (pathParam) => {
+      pathParam.enabled = true;
+      pathParam.type = 'path';
+    });
+
+    const requestParams = [...queryParams, ...pathParams];
+
+    const item = {
+      uid: uuid(),
+      type: requestType,
+      name: requestName,
+      transient: true, // Mark as transient request
+      request: {
+        method: requestMethod,
+        url: requestUrl,
+        headers: headers ?? [],
+        params: requestParams,
+        body: body ?? {
+          mode: 'none',
+          json: null,
+          text: null,
+          xml: null,
+          sparql: null,
+          multipartForm: [],
+          formUrlEncoded: [],
+          file: []
+        },
+        vars: {
+          req: [],
+          res: []
+        },
+        assertions: [],
+        auth: auth ?? {
+          mode: 'inherit'
+        }
+      },
+      settings: settings ?? {
+        encodeUrl: true
+      }
+    };
+
+    dispatch(addTransientItem({ collectionUid, item }));
+    dispatch(addTab({
+      uid: item.uid,
+      collectionUid,
+      type: requestType,
+      preview: false // Transient requests should open as permanent tabs
+    }));
+
+    resolve(item);
+  });
+};
+
+export const newTransientGrpcRequest = (params) => (dispatch, getState) => {
+  const { requestName, requestUrl, collectionUid, body, auth, headers } = params;
+
+  return new Promise((resolve, reject) => {
+    const state = getState();
+    const collection = findCollectionByUid(state.collections.collections, collectionUid);
+    if (!collection) {
+      return reject(new Error('Collection not found'));
+    }
+
+    const item = {
+      uid: uuid(),
+      name: requestName,
+      type: 'grpc-request',
+      transient: true, // Mark as transient request
+      request: {
+        url: requestUrl,
+        headers: headers ?? [],
+        body: body ?? {
+          mode: 'grpc',
+          grpc: [
+            {
+              name: 'message 1',
+              content: '{}'
+            }
+          ]
+        },
+        auth: auth ?? {
+          mode: 'inherit'
+        },
+        vars: {
+          req: [],
+          res: []
+        },
+        script: {
+          req: null,
+          res: null
+        },
+        assertions: [],
+        tests: null
+      }
+    };
+
+    dispatch(addTransientItem({ collectionUid, item }));
+    dispatch(addTab({
+      uid: item.uid,
+      collectionUid,
+      type: 'grpc-request',
+      preview: false // Transient requests should open as permanent tabs
+    }));
+
+    resolve(item);
+  });
+};
+
+export const newTransientWsRequest = (params) => (dispatch, getState) => {
+  const { requestName, requestMethod, requestUrl, collectionUid, body, auth, headers } = params;
+
+  return new Promise((resolve, reject) => {
+    const state = getState();
+    const collection = findCollectionByUid(state.collections.collections, collectionUid);
+    if (!collection) {
+      return reject(new Error('Collection not found'));
+    }
+
+    const item = {
+      uid: uuid(),
+      name: requestName,
+      type: 'ws-request',
+      transient: true, // Mark as transient request
+      request: {
+        url: requestUrl,
+        method: requestMethod,
+        headers: headers ?? [],
+        params: [],
+        body: body ?? {
+          mode: 'ws',
+          ws: [
+            {
+              name: 'message 1',
+              type: 'json',
+              content: '{}'
+            }
+          ]
+        },
+        auth: auth ?? {
+          mode: 'inherit'
+        },
+        vars: {
+          req: [],
+          res: []
+        },
+        script: {
+          req: null,
+          res: null
+        },
+        assertions: [],
+        tests: null
+      }
+    };
+
+    dispatch(addTransientItem({ collectionUid, item }));
+    dispatch(addTab({
+      uid: item.uid,
+      collectionUid,
+      type: 'ws-request',
+      preview: false // Transient requests should open as permanent tabs
+    }));
+
+    resolve(item);
+  });
+};
+
+export const saveTransientRequest = (params) => (dispatch, getState) => {
+  const { itemUid, originalCollectionUid, targetCollectionUid, itemName, itemUidToSaveUnder } = params;
+
+  return new Promise((resolve, reject) => {
+    const state = getState();
+
+    // Find the original collection where the transient item is stored
+    const originalCollection = findCollectionByUid(state.collections.collections, originalCollectionUid);
+    if (!originalCollection) {
+      return reject(new Error('Original collection not found'));
+    }
+
+    // Find the target collection where we want to save the request
+    const targetCollection = findCollectionByUid(state.collections.collections, targetCollectionUid);
+    if (!targetCollection) {
+      return reject(new Error('Target collection not found'));
+    }
+
+    // Find the transient item in the original collection
+    const transientItems = originalCollection.transientItems || [];
+    const transientItem = transientItems.find((i) => i.uid === itemUid);
+    if (!transientItem) {
+      return reject(new Error('Transient item not found'));
+    }
+
+    // Use draft if available, otherwise use the original item data
+    const itemData = transientItem.draft ? transientItem.draft : transientItem;
+    const filename = resolveRequestFilename(itemName, targetCollection.format);
+
+    // Determine parent folder in the target collection
+    const parentItem = itemUidToSaveUnder ? findItemInCollection(targetCollection, itemUidToSaveUnder) : targetCollection;
+    if (!parentItem) {
+      return reject(new Error('Parent folder not found'));
+    }
+
+    // Check for duplicate names
+    const parentItems = parentItem.items || [];
+    const reqWithSameNameExists = find(
+      parentItems,
+      (i) => i.type !== 'folder' && trim(i.filename) === trim(filename)
+    );
+    if (reqWithSameNameExists) {
+      return reject(new Error('Duplicate request names are not allowed under the same folder'));
+    }
+
+    const items = filter(parentItems, (i) => isItemAFolder(i) || isItemARequest(i));
+
+    // Build the item to save with complete structure
+    const itemToSave = {
+      uid: uuid(),
+      type: itemData.type,
+      name: itemName,
+      filename: filename,
+      seq: items.length + 1,
+      settings: itemData.settings || { encodeUrl: true },
+      request: {
+        method: itemData.request?.method || 'GET',
+        url: itemData.request?.url || '',
+        params: itemData.request?.params || [],
+        headers: itemData.request?.headers || [],
+        auth: itemData.request?.auth || { mode: 'inherit' },
+        body: itemData.request?.body || { mode: 'none' },
+        script: itemData.request?.script || { req: null, res: null },
+        vars: itemData.request?.vars || { req: [], res: [] },
+        assertions: itemData.request?.assertions || [],
+        tests: itemData.request?.tests || null,
+        docs: itemData.request?.docs || ''
+      }
+    };
+
+    // Add gRPC specific fields if it's a gRPC request
+    if (itemData.type === 'grpc-request') {
+      itemToSave.request.methodType = itemData.request?.methodType;
+      itemToSave.request.protoPath = itemData.request?.protoPath;
+    }
+
+    const fullName = path.join(parentItem.pathname, filename);
+    const { ipcRenderer } = window;
+
+    ipcRenderer
+      .invoke('renderer:new-request', fullName, itemToSave, targetCollection.format)
+      .then(() => {
+        // Close the transient tab
+        dispatch(closeTabs({ tabUids: [itemUid] }));
+
+        // Remove the transient item from the original collection
+        dispatch(removeTransientItem({ collectionUid: originalCollectionUid, itemUid }));
+
+        // Task middleware will open the saved request in the target collection
+        dispatch(insertTaskIntoQueue({
+          uid: uuid(),
+          type: 'OPEN_REQUEST',
+          collectionUid: targetCollectionUid,
+          itemPathname: fullName,
+          openAsPermanent: true
+        }));
+
+        resolve();
+      })
+      .catch((err) => {
+        console.error('Failed to save transient request:', err);
+        reject(err);
+      });
   });
 };
 

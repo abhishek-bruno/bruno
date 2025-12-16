@@ -235,6 +235,18 @@ export const tabsSlice = createSlice({
       tabs.splice(targetIdx, 0, moved);
 
       state.tabs = tabs;
+    },
+    triggerSaveTransientModal: (state, action) => {
+      const tab = find(state.tabs, (t) => t.uid === action.payload.uid);
+      if (tab) {
+        tab.showSaveTransientModal = true;
+      }
+    },
+    clearSaveTransientModal: (state, action) => {
+      const tab = find(state.tabs, (t) => t.uid === action.payload.uid);
+      if (tab) {
+        tab.showSaveTransientModal = false;
+      }
     }
   }
 });
@@ -253,7 +265,9 @@ export const {
   closeTabs,
   closeAllCollectionTabs,
   makeTabPermanent,
-  reorderTabs
+  reorderTabs,
+  triggerSaveTransientModal,
+  clearSaveTransientModal
 } = tabsSlice.actions;
 
 export default tabsSlice.reducer;

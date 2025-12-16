@@ -13,6 +13,7 @@ import {
   updateAuth
 } from 'providers/ReduxStore/slices/collections';
 import { saveRequest, cancelRequest } from 'providers/ReduxStore/slices/collections/actions';
+import { triggerSaveTransientModal } from 'providers/ReduxStore/slices/tabs';
 import { getRequestFromCurlCommand } from 'utils/curl';
 import HttpMethodSelector from './HttpMethodSelector';
 import { useTheme } from 'providers/Theme';
@@ -38,7 +39,11 @@ const QueryUrl = ({ item, collection, handleRun }) => {
   const hasChanges = useMemo(() => hasRequestChanges(item), [item]);
 
   const onSave = () => {
-    dispatch(saveRequest(item.uid, collection.uid));
+    if (item.transient) {
+      dispatch(triggerSaveTransientModal({ uid: item.uid }));
+    } else {
+      dispatch(saveRequest(item.uid, collection.uid));
+    }
   };
 
   const onUrlChange = (value) => {

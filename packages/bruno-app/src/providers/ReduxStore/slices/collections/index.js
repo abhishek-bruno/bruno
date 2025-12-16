@@ -25,6 +25,17 @@ import path from 'utils/common/path';
 import { getUniqueTagsFromItems } from 'utils/collections/index';
 import * as exampleReducers from './exampleReducers';
 
+// Helper function to find item in collection, checking both regular items and transient items
+const findItemOrTransient = (collection, itemUid) => {
+  // First check regular items
+  const item = findItemInCollection(collection, itemUid);
+  if (item) return item;
+
+  // Then check transient items
+  const transientItems = collection?.transientItems || [];
+  return transientItems.find((i) => i.uid === itemUid);
+};
+
 // gRPC status code meanings
 const grpcStatusCodes = {
   0: 'OK',
@@ -115,6 +126,7 @@ export const collectionsSlice = createSlice({
       collection.settingsSelectedTab = 'overview';
       collection.folderLevelSettingsSelectedTab = {};
       collection.allTags = []; // Initialize collection-level tags
+      collection.transientItems = []; // Initialize transient items array for ad-hoc requests
 
       // Collection mount status is used to track the mount status of the collection
       // values can be 'unmounted', 'mounting', 'mounted'
@@ -303,7 +315,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item) {
           item.name = action.payload.newName;
@@ -416,7 +428,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, itemUid);
+        const item = findItemOrTransient(collection, itemUid);
         if (item) {
           if (item.response?.stream?.running) {
             item.response.stream.running = null;
@@ -437,7 +449,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
         if (item) {
           item.requestState = 'received';
           item.response = action.payload.response;
@@ -474,7 +486,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, collectionUid);
       if (!collection) return;
 
-      const item = findItemInCollection(collection, itemUid);
+      const item = findItemOrTransient(collection, itemUid);
       if (!item) return;
       const request = item.draft ? item.draft.request : item.request;
       const isUnary = request.methodType === 'unary';
@@ -512,7 +524,7 @@ export const collectionsSlice = createSlice({
 
       if (!collection) return;
 
-      const item = findItemInCollection(collection, itemUid);
+      const item = findItemOrTransient(collection, itemUid);
 
       if (!item) return;
 
@@ -632,7 +644,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
         if (item) {
           if (item.response && item.response.stream?.running) {
             item.response.data = '';
@@ -664,7 +676,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && item.draft) {
           item.request = item.draft.request;
@@ -679,7 +691,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && item.draft) {
           item.draft = null;
@@ -802,7 +814,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && item.type === 'folder') {
           item.collapsed = !item.collapsed;
@@ -813,7 +825,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -883,7 +895,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -897,7 +909,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -946,7 +958,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -972,7 +984,7 @@ export const collectionsSlice = createSlice({
         return;
       }
 
-      const item = findItemInCollection(collection, itemUid);
+      const item = findItemOrTransient(collection, itemUid);
       if (!item || !isItemARequest(item)) {
         return;
       }
@@ -1010,7 +1022,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           // Ensure item.draft is a deep clone of item if not already present
@@ -1047,7 +1059,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -1092,7 +1104,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -1115,7 +1127,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -1138,7 +1150,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -1159,7 +1171,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -1179,7 +1191,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -1193,7 +1205,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           // Ensure item.draft is a deep clone of item if not already present
@@ -1219,7 +1231,7 @@ export const collectionsSlice = createSlice({
         return;
       }
 
-      const item = findItemInCollection(collection, itemUid);
+      const item = findItemOrTransient(collection, itemUid);
       if (!item || !isItemARequest(item)) {
         return;
       }
@@ -1294,7 +1306,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -1315,7 +1327,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -1335,7 +1347,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -1353,7 +1365,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, collectionUid);
       if (!collection) return;
 
-      const item = findItemInCollection(collection, itemUid);
+      const item = findItemOrTransient(collection, itemUid);
       if (!item || !isItemARequest(item)) return;
 
       if (!item.draft) {
@@ -1371,7 +1383,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -1391,7 +1403,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -1414,7 +1426,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -1436,7 +1448,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -1454,7 +1466,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, collectionUid);
       if (!collection) return;
 
-      const item = findItemInCollection(collection, itemUid);
+      const item = findItemOrTransient(collection, itemUid);
       if (!item || !isItemARequest(item)) return;
 
       if (!item.draft) {
@@ -1473,7 +1485,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -1493,7 +1505,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -1514,7 +1526,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -1541,7 +1553,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -1563,7 +1575,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection && collection.items && collection.items.length) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -1578,7 +1590,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -1592,7 +1604,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -1644,7 +1656,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -1660,7 +1672,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -1676,7 +1688,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -1691,7 +1703,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -1706,7 +1718,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -1720,7 +1732,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -1735,7 +1747,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -1749,7 +1761,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -1769,7 +1781,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -1788,7 +1800,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -1805,7 +1817,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, collectionUid);
       if (!collection) return;
 
-      const item = findItemInCollection(collection, itemUid);
+      const item = findItemOrTransient(collection, itemUid);
       if (!item || !isItemARequest(item)) return;
 
       if (!item.draft) {
@@ -1823,7 +1835,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -1845,7 +1857,7 @@ export const collectionsSlice = createSlice({
       const varData = action.payload.var || {};
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -1880,7 +1892,7 @@ export const collectionsSlice = createSlice({
       const type = action.payload.type;
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -1916,7 +1928,7 @@ export const collectionsSlice = createSlice({
       const type = action.payload.type;
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -1939,7 +1951,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, collectionUid);
       if (!collection) return;
 
-      const item = findItemInCollection(collection, itemUid);
+      const item = findItemOrTransient(collection, itemUid);
       if (!item || !isItemARequest(item)) return;
 
       if (!item.draft) {
@@ -1964,7 +1976,7 @@ export const collectionsSlice = createSlice({
       const type = action.payload.type;
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           // Ensure item.draft is a deep clone of item if not already present
@@ -2815,7 +2827,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, collectionUid);
       if (!collection) return;
 
-      const item = findItemInCollection(collection, itemUid);
+      const item = findItemOrTransient(collection, itemUid);
       if (!item) return;
 
       item.requestState = null;
@@ -2834,7 +2846,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, itemUid);
+        const item = findItemOrTransient(collection, itemUid);
         if (item) {
           // ignore outdated updates in case multiple requests are fired rapidly to avoid state inconsistency
           if (item.requestUid !== requestUid) return;
@@ -3030,7 +3042,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -3151,7 +3163,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, itemUid);
+        const item = findItemOrTransient(collection, itemUid);
         if (data.data) {
           item.response.data ||= [];
           item.response.data.push({
@@ -3174,7 +3186,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, itemUid);
+        const item = findItemOrTransient(collection, itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -3194,7 +3206,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, itemUid);
+        const item = findItemOrTransient(collection, itemUid);
 
         if (item && isItemARequest(item)) {
           if (!item.draft) {
@@ -3218,12 +3230,63 @@ export const collectionsSlice = createSlice({
     updateActiveConnections: (state, action) => {
       state.activeConnections = [...action.payload.activeConnectionIds];
     },
+    // Transient items reducers - for ad-hoc requests that are not saved to filesystem
+    addTransientItem: (state, action) => {
+      const { collectionUid, item } = action.payload;
+      const collection = findCollectionByUid(state.collections, collectionUid);
+      if (collection) {
+        if (!collection.transientItems) {
+          collection.transientItems = [];
+        }
+        collection.transientItems.push(item);
+      }
+    },
+    updateTransientItem: (state, action) => {
+      const { collectionUid, itemUid, updates } = action.payload;
+      const collection = findCollectionByUid(state.collections, collectionUid);
+      if (collection && collection.transientItems) {
+        const itemIndex = collection.transientItems.findIndex((i) => i.uid === itemUid);
+        if (itemIndex !== -1) {
+          collection.transientItems[itemIndex] = {
+            ...collection.transientItems[itemIndex],
+            ...updates
+          };
+        }
+      }
+    },
+    removeTransientItem: (state, action) => {
+      const { collectionUid, itemUid } = action.payload;
+      const collection = findCollectionByUid(state.collections, collectionUid);
+      if (collection && collection.transientItems) {
+        collection.transientItems = collection.transientItems.filter((i) => i.uid !== itemUid);
+      }
+    },
+    updateTransientItemDraft: (state, action) => {
+      const { collectionUid, itemUid, draft } = action.payload;
+      const collection = findCollectionByUid(state.collections, collectionUid);
+      if (collection && collection.transientItems) {
+        const item = collection.transientItems.find((i) => i.uid === itemUid);
+        if (item) {
+          item.draft = draft;
+        }
+      }
+    },
+    deleteTransientItemDraft: (state, action) => {
+      const { collectionUid, itemUid } = action.payload;
+      const collection = findCollectionByUid(state.collections, collectionUid);
+      if (collection && collection.transientItems) {
+        const item = collection.transientItems.find((i) => i.uid === itemUid);
+        if (item) {
+          delete item.draft;
+        }
+      }
+    },
     runWsRequestEvent: (state, action) => {
       const { itemUid, collectionUid, eventType, eventData } = action.payload;
       const collection = findCollectionByUid(state.collections, collectionUid);
       if (!collection) return;
 
-      const item = findItemInCollection(collection, itemUid);
+      const item = findItemOrTransient(collection, itemUid);
       if (!item) return;
       const request = item.draft ? item.draft.request : item.request;
 
@@ -3261,7 +3324,7 @@ export const collectionsSlice = createSlice({
 
       if (!collection) return;
 
-      const item = findItemInCollection(collection, itemUid);
+      const item = findItemOrTransient(collection, itemUid);
 
       if (!item) return;
 
@@ -3356,7 +3419,7 @@ export const collectionsSlice = createSlice({
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
       if (collection) {
-        const item = findItemInCollection(collection, action.payload.itemUid);
+        const item = findItemOrTransient(collection, action.payload.itemUid);
         if (item) {
           item.response.sortOrder = item.response.sortOrder ? -item.response.sortOrder : -1;
         }
@@ -3553,6 +3616,11 @@ export const {
   deleteRequestTag,
   updateCollectionTagsList,
   updateActiveConnections,
+  addTransientItem,
+  updateTransientItem,
+  removeTransientItem,
+  updateTransientItemDraft,
+  deleteTransientItemDraft,
   runWsRequestEvent,
   wsResponseReceived,
   wsUpdateResponseSortOrder,

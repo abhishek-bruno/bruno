@@ -13,8 +13,8 @@ import {
   saveFolderRoot,
   saveCollectionSettings
 } from 'providers/ReduxStore/slices/collections/actions';
-import { findCollectionByUid, findItemInCollection } from 'utils/collections';
-import { addTab, closeTabs, reorderTabs, switchTab } from 'providers/ReduxStore/slices/tabs';
+import { findCollectionByUid, findItemInCollection, findItemOrTransientInCollection } from 'utils/collections';
+import { addTab, closeTabs, reorderTabs, switchTab, triggerSaveTransientModal } from 'providers/ReduxStore/slices/tabs';
 import { toggleSidebarCollapse } from 'providers/ReduxStore/slices/app';
 import { getKeyBindingsForActionAllOS } from './keyMappings';
 
@@ -40,21 +40,29 @@ export const HotkeysProvider = (props) => {
   // save hotkey
   useEffect(() => {
     Mousetrap.bind([...getKeyBindingsForActionAllOS('save')], (e) => {
-      const activeTab = find(tabs, (t) => t.uid === activeTabUid);
-      if (activeTab) {
-        if (activeTab.type === 'environment-settings' || activeTab.type === 'global-environment-settings') {
-          window.dispatchEvent(new CustomEvent('environment-save'));
-          return false;
-        }
+      if (isEnvironmentSettingsModalOpen || isGlobalEnvironmentSettingsModalOpen) {
+        console.log('todo: save environment settings');
+      } else {
+        const activeTab = find(tabs, (t) => t.uid === activeTabUid);
+        if (activeTab) {
+          if (activeTab.type === 'environment-settings' || activeTab.type === 'global-environment-settings') {
+            window.dispatchEvent(new CustomEvent('environment-save'));
+            return false;
+          }
 
-        const collection = findCollectionByUid(collections, activeTab.collectionUid);
-        if (collection) {
-          const item = findItemInCollection(collection, activeTab.uid);
-          if (item && item.uid) {
-            if (activeTab.type === 'folder-settings') {
-              dispatch(saveFolderRoot(collection.uid, item.uid));
-            } else {
-              dispatch(saveRequest(activeTab.uid, activeTab.collectionUid));
+          const collection = findCollectionByUid(collections, activeTab.collectionUid);
+          if (collection) {
+            // Check for transient items first
+            const item = findItemOrTransientInCollection(collection, activeTab.uid);
+            if (item && item.transient) {
+              // For transient items, trigger the save modal
+              dispatch(triggerSaveTransientModal({ uid: activeTab.uid }));
+            } else if (item && item.uid) {
+              if (activeTab.type === 'folder-settings') {
+                dispatch(saveFolderRoot(collection.uid, item.uid));
+              } else {
+                dispatch(saveRequest(activeTab.uid, activeTab.collectionUid));
+              }
             }
           } else if (activeTab.type === 'collection-settings') {
             dispatch(saveCollectionSettings(collection.uid));
@@ -78,7 +86,7 @@ export const HotkeysProvider = (props) => {
         const collection = findCollectionByUid(collections, activeTab.collectionUid);
 
         if (collection) {
-          const item = findItemInCollection(collection, activeTab.uid);
+          const item = findItemOrTransientInCollection(collection, activeTab.uid);
           if (item) {
             if (item.type === 'grpc-request') {
               const request = item.draft ? item.draft.request : item.request;

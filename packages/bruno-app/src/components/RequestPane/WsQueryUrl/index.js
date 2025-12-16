@@ -3,6 +3,7 @@ import classnames from 'classnames';
 import SingleLineEditor from 'components/SingleLineEditor/index';
 import { requestUrlChanged } from 'providers/ReduxStore/slices/collections';
 import { wsConnectOnly, saveRequest } from 'providers/ReduxStore/slices/collections/actions';
+import { triggerSaveTransientModal } from 'providers/ReduxStore/slices/tabs';
 import { useTheme } from 'providers/Theme';
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import toast from 'react-hot-toast';
@@ -98,8 +99,12 @@ const WsQueryUrl = ({ item, collection, handleRun }) => {
     handleRun(e);
   };
 
-  const onSave = (finalValue) => {
-    dispatch(saveRequest(item.uid, collection.uid));
+  const onSave = () => {
+    if (item.transient) {
+      dispatch(triggerSaveTransientModal({ uid: item.uid }));
+    } else {
+      dispatch(saveRequest(item.uid, collection.uid));
+    }
   };
 
   const handleUrlChange = (value) => {

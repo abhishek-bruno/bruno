@@ -7,7 +7,7 @@ import HttpRequestPane from 'components/RequestPane/HttpRequestPane';
 import GrpcRequestPane from 'components/RequestPane/GrpcRequestPane/index';
 import ResponsePane from 'components/ResponsePane';
 import GrpcResponsePane from 'components/ResponsePane/GrpcResponsePane';
-import { findItemInCollection } from 'utils/collections';
+import { findItemInCollection, findItemOrTransientInCollection } from 'utils/collections';
 import { cancelRequest, sendRequest } from 'providers/ReduxStore/slices/collections/actions';
 import RequestNotFound from './RequestNotFound';
 import QueryUrl from 'components/RequestPane/QueryUrl/index';
@@ -196,7 +196,7 @@ const RequestTabPanel = () => {
     return <ResponseExample item={item} collection={collection} example={example} />;
   }
 
-  const item = findItemInCollection(collection, activeTabUid);
+  const item = findItemOrTransientInCollection(collection, activeTabUid);
   const isGrpcRequest = item?.type === 'grpc-request';
   const isWsRequest = item?.type === 'ws-request';
 
