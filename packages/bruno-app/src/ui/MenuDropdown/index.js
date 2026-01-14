@@ -445,7 +445,7 @@ const MenuDropdown = forwardRef(({
         {header && (
           <div className="dropdown-header-container" onClick={handleClickOutside}>
             {header}
-            <div className="dropdown-divider"></div>
+            <div className="dropdown-separator"></div>
           </div>
         )}
         <div role="menu" tabIndex={-1} onKeyDown={handleMenuKeyDown}>
@@ -453,7 +453,7 @@ const MenuDropdown = forwardRef(({
         </div>
         {footer && (
           <>
-            <div className="dropdown-divider"></div>
+            <div className="dropdown-separator"></div>
             <div className="dropdown-footer-container">
               {footer}
             </div>

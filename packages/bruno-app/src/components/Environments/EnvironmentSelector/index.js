@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useRef, forwardRef } from 'react';
+import React, { useMemo, useState, useRef, forwardRef, useEffect } from 'react';
 import find from 'lodash/find';
 import Dropdown from 'components/Dropdown';
 import { IconWorld, IconDatabase, IconCaretDown } from '@tabler/icons';
@@ -17,7 +17,9 @@ import StyledWrapper from './StyledWrapper';
 const EnvironmentSelector = ({ collection }) => {
   const dispatch = useDispatch();
   const dropdownTippyRef = useRef();
-  const [activeTab, setActiveTab] = useState('collection');
+  const isVirtual = collection?.virtual;
+  // For virtual collections, always default to 'global' tab
+  const [activeTab, setActiveTab] = useState(isVirtual ? 'global' : 'collection');
   const [showCreateGlobalModal, setShowCreateGlobalModal] = useState(false);
   const [showImportGlobalModal, setShowImportGlobalModal] = useState(false);
   const [showCreateCollectionModal, setShowCreateCollectionModal] = useState(false);
@@ -35,10 +37,20 @@ const EnvironmentSelector = ({ collection }) => {
     ? find(environments, (e) => e.uid === activeEnvironmentUid)
     : null;
 
-  const tabs = [
-    { id: 'collection', label: 'Collection', icon: <IconDatabase size={16} strokeWidth={1.5} /> },
-    { id: 'global', label: 'Global', icon: <IconWorld size={16} strokeWidth={1.5} /> }
-  ];
+  // Sync activeTab when isVirtual changes (e.g., when collection loads)
+  useEffect(() => {
+    if (isVirtual && activeTab !== 'global') {
+      setActiveTab('global');
+    }
+  }, [isVirtual, activeTab]);
+
+  // For virtual collections, only show Global tab
+  const tabs = isVirtual
+    ? [{ id: 'global', label: 'Global', icon: <IconWorld size={16} strokeWidth={1.5} /> }]
+    : [
+        { id: 'collection', label: 'Collection', icon: <IconDatabase size={16} strokeWidth={1.5} /> },
+        { id: 'global', label: 'Global', icon: <IconWorld size={16} strokeWidth={1.5} /> }
+      ];
 
   const onDropdownCreate = (ref) => {
     dropdownTippyRef.current = ref;
@@ -52,10 +64,13 @@ const EnvironmentSelector = ({ collection }) => {
 
   // Environment selection handler
   const handleEnvironmentSelect = (environment) => {
-    const action
-      = activeTab === 'collection'
-        ? selectEnvironment(environment ? environment.uid : null, collection.uid)
-        : selectGlobalEnvironment({ environmentUid: environment ? environment.uid : null });
+    // For virtual collections, always use global environment selection
+    // Also use global selection when activeTab is 'global'
+    const useGlobalSelection = isVirtual || activeTab === 'global';
+
+    const action = useGlobalSelection
+      ? selectGlobalEnvironment({ environmentUid: environment ? environment.uid : null })
+      : selectEnvironment(environment ? environment.uid : null, collection.uid);
 
     dispatch(action)
       .then(() => {
@@ -127,11 +142,15 @@ const EnvironmentSelector = ({ collection }) => {
 
   // Create icon component for dropdown trigger
   const Icon = forwardRef((props, ref) => {
-    const hasAnyEnv = activeGlobalEnvironment || activeCollectionEnvironment;
+    // For virtual collections, only consider global environment
+    const hasAnyEnv = isVirtual
+      ? activeGlobalEnvironment
+      : activeGlobalEnvironment || activeCollectionEnvironment;
 
     const displayContent = hasAnyEnv ? (
       <>
-        {activeCollectionEnvironment && (
+        {/* Hide collection environment display for virtual collections */}
+        {!isVirtual && activeCollectionEnvironment && (
           <>
             <div className="flex items-center">
               <IconDatabase size={14} strokeWidth={1.5} className="env-icon" />
@@ -150,7 +169,8 @@ const EnvironmentSelector = ({ collection }) => {
         )}
         {activeGlobalEnvironment && (
           <div className="flex items-center">
-            <IconWorld size={14} strokeWidth={1.5} className="env-icon" />
+            {/* Hide globe icon for virtual collections (workspace context) */}
+            {!isVirtual && <IconWorld size={14} strokeWidth={1.5} className="env-icon" />}
             <ToolHint
               text={activeGlobalEnvironment.name}
               toolhintId={`global-env-${activeGlobalEnvironment.uid}`}
@@ -185,30 +205,32 @@ const EnvironmentSelector = ({ collection }) => {
     <StyledWrapper width={dropdownWidth}>
       <div className="environment-selector flex align-center cursor-pointer">
         <Dropdown onCreate={onDropdownCreate} icon={<Icon />} placement="bottom-end">
-          {/* Tab Headers */}
-          <div className="tab-header flex pt-3 pb-2 px-3">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                className={`tab-button whitespace-nowrap pb-[0.375rem] border-b-[0.125rem] bg-transparent flex align-center cursor-pointer transition-all duration-200 mr-[1.25rem] ${
-                  activeTab === tab.id ? 'active' : 'inactive'
-                }`}
-                onClick={() => setActiveTab(tab.id)}
-                data-testid={`env-tab-${tab.id}`}
-              >
-                <span className="tab-content-wrapper">
-                  {tab.icon}
-                  {tab.label}
-                </span>
-              </button>
-            ))}
-          </div>
+          {/* Tab Headers - hide for virtual collections since only global is available */}
+          {!isVirtual && (
+            <div className="tab-header flex pt-3 pb-2 px-3">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  className={`tab-button whitespace-nowrap pb-[0.375rem] border-b-[0.125rem] bg-transparent flex align-center cursor-pointer transition-all duration-200 mr-[1.25rem] ${
+                    activeTab === tab.id ? 'active' : 'inactive'
+                  }`}
+                  onClick={() => setActiveTab(tab.id)}
+                  data-testid={`env-tab-${tab.id}`}
+                >
+                  <span className="tab-content-wrapper">
+                    {tab.icon}
+                    {tab.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Tab Content */}
-          <div className="tab-content">
+          <div className={`tab-content ${isVirtual ? 'pt-2' : ''}`}>
             <EnvironmentListContent
-              environments={activeTab === 'collection' ? environments : globalEnvironments}
-              activeEnvironmentUid={activeTab === 'collection' ? activeEnvironmentUid : activeGlobalEnvironmentUid}
+              environments={isVirtual ? globalEnvironments : (activeTab === 'collection' ? environments : globalEnvironments)}
+              activeEnvironmentUid={isVirtual ? activeGlobalEnvironmentUid : (activeTab === 'collection' ? activeEnvironmentUid : activeGlobalEnvironmentUid)}
               description={description}
               onEnvironmentSelect={handleEnvironmentSelect}
               onSettingsClick={handleSettingsClick}

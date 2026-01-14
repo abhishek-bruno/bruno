@@ -22,6 +22,7 @@ taskMiddleware.startListening({
   effect: (action, listenerApi) => {
     const state = listenerApi.getState();
     const collectionUid = get(action, 'payload.file.meta.collectionUid');
+    const activeWorkspaceUid = state.workspaces.activeWorkspaceUid;
 
     const openRequestTasks = filter(state.app.taskQueue, { type: taskTypes.OPEN_REQUEST });
     each(openRequestTasks, (task) => {
@@ -35,7 +36,8 @@ taskMiddleware.startListening({
                 uid: item.uid,
                 collectionUid: collection.uid,
                 requestPaneTab: getDefaultRequestPaneTab(item),
-                preview: task.openAsPermanent ? false : undefined
+                preview: task.openAsPermanent ? false : undefined,
+                workspaceUid: activeWorkspaceUid
               })
             );
           }
@@ -63,6 +65,7 @@ taskMiddleware.startListening({
   effect: (action, listenerApi) => {
     const state = listenerApi.getState();
     const collectionUid = get(action, 'payload.file.meta.collectionUid');
+    const activeWorkspaceUid = state.workspaces.activeWorkspaceUid;
 
     const openExampleTasks = filter(state.app.taskQueue, { type: taskTypes.OPEN_EXAMPLE });
     each(openExampleTasks, (task) => {
@@ -78,7 +81,8 @@ taskMiddleware.startListening({
                 exampleUid: example.uid,
                 collectionUid: collection.uid,
                 type: 'response-example',
-                itemUid: item.uid
+                itemUid: item.uid,
+                workspaceUid: activeWorkspaceUid
               }));
             }
           }

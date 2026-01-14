@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { useDispatch, useSelector } from 'react-redux';
 import {
@@ -6,7 +6,7 @@ import {
   IconDotsVertical,
   IconDownload,
   IconFolder,
-  IconPlus,
+  IconFolderPlus,
   IconSearch,
   IconSortAscendingLetters,
   IconSortDescendingLetters,
@@ -16,11 +16,14 @@ import {
 } from '@tabler/icons';
 
 import { importCollection, openCollection } from 'providers/ReduxStore/slices/collections/actions';
+import { createOrGetVirtualCollection } from 'providers/ReduxStore/slices/collections';
 import { sortCollections } from 'providers/ReduxStore/slices/collections/index';
 import { normalizePath } from 'utils/common/path';
 
 import MenuDropdown from 'ui/MenuDropdown';
 import ActionIcon from 'ui/ActionIcon';
+import ToolHint from 'components/ToolHint';
+import CreateTransientRequest from 'components/CreateTransientRequest';
 import ImportCollection from 'components/Sidebar/ImportCollection';
 import ImportCollectionLocation from 'components/Sidebar/ImportCollectionLocation';
 import RemoveCollectionsModal from 'components/Sidebar/Collections/RemoveCollectionsModal/index';
@@ -31,19 +34,34 @@ import { openDevtoolsAndSwitchToTerminal } from 'utils/terminal';
 
 const CollectionsSection = () => {
   const [showSearch, setShowSearch] = useState(false);
+  const [isCollectionActionsOpen, setIsCollectionActionsOpen] = useState(false);
+  const [isMoreActionsOpen, setIsMoreActionsOpen] = useState(false);
   const dispatch = useDispatch();
 
   const { workspaces, activeWorkspaceUid } = useSelector((state) => state.workspaces);
   const activeWorkspace = workspaces.find((w) => w.uid === activeWorkspaceUid);
 
-  const { collections } = useSelector((state) => state.collections);
-  const { collectionSortOrder } = useSelector((state) => state.collections);
+  const { collections, collectionSortOrder } = useSelector((state) => state.collections);
+
+  // Check if virtual collection exists for the active workspace
+  const virtualCollectionUid = activeWorkspaceUid ? `virtual-${activeWorkspaceUid}` : null;
+  const virtualCollectionExists = virtualCollectionUid ? collections.some((c) => c.uid === virtualCollectionUid) : false;
   const [collectionsToClose, setCollectionsToClose] = useState([]);
 
   const [importData, setImportData] = useState(null);
   const [createCollectionModalOpen, setCreateCollectionModalOpen] = useState(false);
   const [importCollectionModalOpen, setImportCollectionModalOpen] = useState(false);
   const [importCollectionLocationModalOpen, setImportCollectionLocationModalOpen] = useState(false);
+
+  // Ensure virtual collection exists for the active workspace
+  useEffect(() => {
+    if (activeWorkspaceUid && activeWorkspace) {
+      dispatch(createOrGetVirtualCollection({
+        workspaceUid: activeWorkspaceUid,
+        workspaceName: activeWorkspace.name
+      }));
+    }
+  }, [activeWorkspaceUid, activeWorkspace, dispatch]);
 
   const workspaceCollections = useMemo(() => {
     if (!activeWorkspace) return [];
@@ -138,7 +156,7 @@ const CollectionsSection = () => {
   const addDropdownItems = [
     {
       id: 'create',
-      leftSection: IconPlus,
+      leftSection: IconFolderPlus,
       label: 'Create collection',
       onClick: () => {
         setCreateCollectionModalOpen(true);
@@ -191,35 +209,75 @@ const CollectionsSection = () => {
 
   const sectionActions = (
     <>
-      <ActionIcon
-        onClick={handleToggleSearch}
-        label="Search requests"
+      <ToolHint
+        text="Search requests"
+        toolhintId="sidebar-search-requests"
+        place="bottom"
+        delayShow={800}
+        positionStrategy="fixed"
       >
-        <IconSearch size={14} stroke={1.5} aria-hidden="true" />
-      </ActionIcon>
+        <ActionIcon
+          data-testid="collections-search"
+          onClick={handleToggleSearch}
+        >
+          <IconSearch size={14} stroke={1.5} aria-hidden="true" />
+        </ActionIcon>
+      </ToolHint>
 
       <MenuDropdown
         data-testid="collections-header-add-menu"
         items={addDropdownItems}
         placement="bottom-end"
+        onShow={() => setIsCollectionActionsOpen(true)}
+        onHide={() => setIsCollectionActionsOpen(false)}
       >
-        <ActionIcon
-          label="Add new collection"
-        >
-          <IconPlus size={14} stroke={1.5} aria-hidden="true" />
-        </ActionIcon>
+        <div>
+          <ToolHint
+            text="Create/Open/Import Collection"
+            toolhintId="sidebar-collection-actions"
+            place="bottom"
+            delayShow={800}
+            hidden={isCollectionActionsOpen}
+            positionStrategy="fixed"
+          >
+            <ActionIcon data-testid="collections-actions">
+              <IconFolderPlus size={14} stroke={1.5} aria-hidden="true" />
+            </ActionIcon>
+          </ToolHint>
+        </div>
       </MenuDropdown>
+
+      {virtualCollectionExists && (
+        <CreateTransientRequest
+          collectionUid={virtualCollectionUid}
+          placement="bottom"
+          tooltipPlacement="bottom"
+          tooltipPositionStrategy="fixed"
+          location="sidebar"
+        />
+      )}
 
       <MenuDropdown
         data-testid="collections-header-actions-menu"
         items={actionsDropdownItems}
         placement="bottom-end"
+        onShow={() => setIsMoreActionsOpen(true)}
+        onHide={() => setIsMoreActionsOpen(false)}
       >
-        <ActionIcon
-          label="More actions"
-        >
-          <IconDotsVertical size={14} stroke={1.5} aria-hidden="true" />
-        </ActionIcon>
+        <div>
+          <ToolHint
+            text="More actions"
+            toolhintId="sidebar-more-actions"
+            place="bottom"
+            delayShow={800}
+            hidden={isMoreActionsOpen}
+            positionStrategy="fixed"
+          >
+            <ActionIcon data-testid="collections-more-actions">
+              <IconDotsVertical size={14} stroke={1.5} aria-hidden="true" />
+            </ActionIcon>
+          </ToolHint>
+        </div>
       </MenuDropdown>
 
       {collectionsToClose.length > 0 && (

@@ -67,6 +67,7 @@ const Collection = ({ collection, searchText }) => {
 
   const isCollectionFocused = useSelector(isTabForItemActive({ itemUid: collection.uid }));
   const { hasCopiedItems } = useSelector((state) => state.app.clipboard);
+  const activeWorkspaceUid = useSelector((state) => state.workspaces.activeWorkspaceUid);
   const menuDropdownRef = useRef(null);
 
   const handleRun = () => {
@@ -74,7 +75,8 @@ const Collection = ({ collection, searchText }) => {
       addTab({
         uid: uuid(),
         collectionUid: collection.uid,
-        type: 'collection-runner'
+        type: 'collection-runner',
+        workspaceUid: activeWorkspaceUid
       })
     );
   };
@@ -120,7 +122,8 @@ const Collection = ({ collection, searchText }) => {
         addTab({
           uid: collection.uid,
           collectionUid: collection.uid,
-          type: 'collection-settings'
+          type: 'collection-settings',
+          workspaceUid: activeWorkspaceUid
         })
       );
     }
@@ -157,7 +160,8 @@ const Collection = ({ collection, searchText }) => {
       addTab({
         uid: collection.uid,
         collectionUid: collection.uid,
-        type: 'collection-settings'
+        type: 'collection-settings',
+        workspaceUid: activeWorkspaceUid
       })
     );
   };

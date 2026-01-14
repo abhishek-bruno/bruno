@@ -185,6 +185,13 @@ const Wrapper = styled.div`
             color: ${(props) => props.theme.text};
           }
         }
+
+        &.add-tab {
+          svg {
+            height: 16px;
+            width: 16px;
+          }
+        }
       }
     }
   }

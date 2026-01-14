@@ -3,9 +3,9 @@ import { useSelector, useDispatch } from 'react-redux';
 import { IconArrowLeft, IconPlus, IconFolder, IconLock, IconDots, IconCategory, IconLogin } from '@tabler/icons';
 import toast from 'react-hot-toast';
 
-import { showHomePage } from 'providers/ReduxStore/slices/app';
 import { switchWorkspace } from 'providers/ReduxStore/slices/workspaces/actions';
 import { showInFolder } from 'providers/ReduxStore/slices/collections/actions';
+import { hideManageWorkspacePage } from 'providers/ReduxStore/slices/app';
 import { sortWorkspaces } from 'utils/workspaces';
 
 import CreateWorkspace from 'components/WorkspaceSidebar/CreateWorkspace';
@@ -30,12 +30,12 @@ const ManageWorkspace = () => {
   }, [workspaces, preferences]);
 
   const handleBack = () => {
-    dispatch(showHomePage());
+    // Hide manage workspace page to show workspace tabs
+    dispatch(hideManageWorkspacePage());
   };
 
   const handleOpenWorkspace = (workspace) => {
     dispatch(switchWorkspace(workspace.uid));
-    dispatch(showHomePage());
     toast.success(`Switched to ${workspace.name}`);
   };
 

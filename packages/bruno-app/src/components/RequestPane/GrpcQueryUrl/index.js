@@ -27,6 +27,7 @@ import useReflectionManagement from 'hooks/useReflectionManagement/index';
 import useProtoFileManagement from 'hooks/useProtoFileManagement/index';
 import MethodDropdown from './MethodDropdown';
 import ProtoFileDropdown from './ProtoFileDropdown';
+import TransientRequestTypeSelector from '../QueryUrl/TransientRequestTypeSelector';
 
 const STREAMING_METHOD_TYPES = ['client-streaming', 'server-streaming', 'bidi-streaming'];
 const CLIENT_STREAMING_METHOD_TYPES = ['client-streaming', 'bidi-streaming'];
@@ -40,7 +41,20 @@ const GrpcQueryUrl = ({ item, collection, handleRun }) => {
   const isMac = isMacOS();
   const saveShortcut = isMac ? 'Cmd + S' : 'Ctrl + S';
   const editorRef = useRef(null);
+  const prevItemUid = useRef(null);
   const isConnectionActive = useSelector((state) => state.collections.activeConnections.includes(item.uid));
+
+  // Auto-focus URL bar when a new request is created (empty URL)
+  useEffect(() => {
+    if (item?.uid !== prevItemUid.current) {
+      prevItemUid.current = item?.uid;
+      if (!url && editorRef.current?.editor) {
+        setTimeout(() => {
+          editorRef.current?.editor?.focus();
+        }, 50);
+      }
+    }
+  }, [item?.uid, url]);
 
   const [grpcMethods, setGrpcMethods] = useState([]);
   const [selectedGrpcMethod, setSelectedGrpcMethod] = useState({
@@ -319,6 +333,10 @@ const GrpcQueryUrl = ({ item, collection, handleRun }) => {
         />
 
       </div>
+
+      {item.transient && (
+        <TransientRequestTypeSelector item={item} collection={collection} />
+      )}
 
       <div className="flex items-center h-full mx-2 gap-3" id="send-request">
         <MethodDropdown

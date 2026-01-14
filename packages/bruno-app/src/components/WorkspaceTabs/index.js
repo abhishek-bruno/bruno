@@ -1,13 +1,14 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import filter from 'lodash/filter';
 import classnames from 'classnames';
-import { IconChevronRight, IconChevronLeft } from '@tabler/icons';
+import { IconChevronRight, IconChevronLeft, IconPlus } from '@tabler/icons';
 import { useSelector, useDispatch } from 'react-redux';
 import { focusWorkspaceTab, initializeWorkspaceTabs } from 'providers/ReduxStore/slices/workspaceTabs';
+import { newStandaloneTransientRequest } from 'providers/ReduxStore/slices/collections/actions';
 import WorkspaceTab from './WorkspaceTab';
 import StyledWrapper from './StyledWrapper';
 
-const PERMANENT_TABS = [
+const DEFAULT_TABS = [
   { type: 'overview', label: 'Overview' },
   { type: 'environments', label: 'Global Environments' }
 ];
@@ -25,12 +26,12 @@ const WorkspaceTabs = ({ workspaceUid }) => {
   const sidebarCollapsed = useSelector((state) => state.app.sidebarCollapsed);
   const screenWidth = useSelector((state) => state.app.screenWidth);
 
-  // Initialize permanent tabs for this workspace
+  // Initialize default tabs for this workspace
   useEffect(() => {
     if (workspaceUid) {
       dispatch(initializeWorkspaceTabs({
         workspaceUid,
-        permanentTabs: PERMANENT_TABS
+        defaultTabs: DEFAULT_TABS
       }));
     }
   }, [workspaceUid, dispatch]);
@@ -74,7 +75,6 @@ const WorkspaceTabs = ({ workspaceUid }) => {
   const getTabClassname = (tab, index) => {
     return classnames('request-tab select-none', {
       'active': tab.uid === activeTabUid,
-      'permanent-tab': tab.permanent,
       'last-tab': workspaceTabs && workspaceTabs.length && index === workspaceTabs.length - 1,
       'has-overflow': tabOverflowStates[tab.uid]
     });
@@ -84,8 +84,29 @@ const WorkspaceTabs = ({ workspaceUid }) => {
     dispatch(focusWorkspaceTab({ uid: tab.uid }));
   };
 
-  if (!workspaceUid || workspaceTabs.length === 0) {
+  const handleCreateTransientRequest = () => {
+    dispatch(newStandaloneTransientRequest({ workspaceUid }));
+  };
+
+  if (!workspaceUid) {
     return null;
+  }
+
+  // Show only plus button when no tabs are open
+  if (workspaceTabs.length === 0) {
+    return (
+      <StyledWrapper>
+        <div className="flex items-center pl-2">
+          <ul role="tablist">
+            <li className="select-none short-tab add-tab" onClick={handleCreateTransientRequest}>
+              <div className="flex items-center">
+                <IconPlus size={18} strokeWidth={1.5} />
+              </div>
+            </li>
+          </ul>
+        </div>
+      </StyledWrapper>
+    );
   }
 
   const effectiveSidebarWidth = sidebarCollapsed ? 0 : leftSidebarWidth;
@@ -149,6 +170,11 @@ const WorkspaceTabs = ({ workspaceUid }) => {
               </div>
             </li>
           ) : null}
+          <li className="select-none short-tab add-tab" onClick={handleCreateTransientRequest} title="New Request">
+            <div className="flex items-center">
+              <IconPlus size={18} strokeWidth={1.5} />
+            </div>
+          </li>
         </ul>
       </div>
     </StyledWrapper>

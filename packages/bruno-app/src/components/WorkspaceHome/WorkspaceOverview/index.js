@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { IconPlus, IconFolder, IconDownload } from '@tabler/icons';
-import { importCollection, openCollection } from 'providers/ReduxStore/slices/collections/actions';
+import { IconPlus, IconFolder, IconDownload, IconFolderPlus } from '@tabler/icons';
+import { importCollection, openCollection, newStandaloneTransientRequest } from 'providers/ReduxStore/slices/collections/actions';
 import toast from 'react-hot-toast';
 import CreateCollection from 'components/Sidebar/CreateCollection';
 import ImportCollection from 'components/Sidebar/ImportCollection';
@@ -11,9 +11,11 @@ import CollectionsList from './CollectionsList';
 import WorkspaceDocs from '../WorkspaceDocs';
 import StyledWrapper from './StyledWrapper';
 
-const WorkspaceOverview = ({ workspace }) => {
+const WorkspaceOverview = () => {
   const dispatch = useDispatch();
   const { globalEnvironments } = useSelector((state) => state.globalEnvironments);
+  const { workspaces, activeWorkspaceUid } = useSelector((state) => state.workspaces);
+  const workspace = workspaces.find((w) => w.uid === activeWorkspaceUid);
 
   const [createCollectionModalOpen, setCreateCollectionModalOpen] = useState(false);
   const [importCollectionModalOpen, setImportCollectionModalOpen] = useState(false);
@@ -49,6 +51,12 @@ const WorkspaceOverview = ({ workspace }) => {
 
   const handleImportCollection = () => {
     setImportCollectionModalOpen(true);
+  };
+
+  const handleNewRequest = () => {
+    if (activeWorkspaceUid) {
+      dispatch(newStandaloneTransientRequest({ workspaceUid: activeWorkspaceUid }));
+    }
   };
 
   const handleImportCollectionSubmit = ({ rawData, type }) => {
@@ -112,6 +120,14 @@ const WorkspaceOverview = ({ workspace }) => {
                 color="light"
                 size="sm"
                 icon={<IconPlus size={14} strokeWidth={1.5} />}
+                onClick={handleNewRequest}
+              >
+                New Request
+              </Button>
+              <Button
+                color="light"
+                size="sm"
+                icon={<IconFolderPlus size={14} strokeWidth={1.5} />}
                 onClick={handleCreateCollection}
               >
                 Create Collection

@@ -20,7 +20,8 @@ import {
   isItemARequest,
   getAllVariables,
   transformRequestToSaveToFilesystem,
-  transformCollectionRootToSave
+  transformCollectionRootToSave,
+  getDefaultRequestPaneTab
 } from 'utils/collections';
 import { uuid, waitForNextTick } from 'utils/common';
 import { cancelNetworkRequest, connectWS, sendGrpcRequest, sendNetworkRequest, sendWsRequest } from 'utils/network/index';
@@ -34,6 +35,7 @@ import {
   selectEnvironment as _selectEnvironment,
   sortCollections as _sortCollections,
   updateCollectionMountStatus,
+  updateCollectionLoadingState,
   moveCollection,
   workspaceEnvUpdateEvent,
   requestCancelled,
@@ -57,7 +59,9 @@ import {
   addCollectionVar,
   updateCollectionVar,
   addTransientItem,
-  removeTransientItem
+  removeTransientItem,
+  createOrGetVirtualCollection,
+  collectionAddFileEvent
 } from './index';
 
 import { each } from 'lodash';
@@ -1594,11 +1598,16 @@ export const newTransientHttpRequest = (params) => (dispatch, getState) => {
     };
 
     dispatch(addTransientItem({ collectionUid, item }));
+
+    // Get the active workspace for tab association
+    const activeWorkspaceUid = state.workspaces.activeWorkspaceUid;
+
     dispatch(addTab({
       uid: item.uid,
       collectionUid,
       type: requestType,
-      preview: false // Transient requests should open as permanent tabs
+      preview: false, // Transient requests should open as permanent tabs
+      workspaceUid: activeWorkspaceUid
     }));
 
     resolve(item);
@@ -1645,15 +1654,23 @@ export const newTransientGrpcRequest = (params) => (dispatch, getState) => {
         },
         assertions: [],
         tests: null
+      },
+      settings: {
+        encodeUrl: true
       }
     };
 
     dispatch(addTransientItem({ collectionUid, item }));
+
+    // Get the active workspace for tab association
+    const activeWorkspaceUid = state.workspaces.activeWorkspaceUid;
+
     dispatch(addTab({
       uid: item.uid,
       collectionUid,
       type: 'grpc-request',
-      preview: false // Transient requests should open as permanent tabs
+      preview: false, // Transient requests should open as permanent tabs
+      workspaceUid: activeWorkspaceUid
     }));
 
     resolve(item);
@@ -1703,15 +1720,266 @@ export const newTransientWsRequest = (params) => (dispatch, getState) => {
         },
         assertions: [],
         tests: null
+      },
+      settings: {
+        timeout: 0,
+        keepAliveInterval: 0
       }
     };
 
     dispatch(addTransientItem({ collectionUid, item }));
+
+    // Get the active workspace for tab association
+    const activeWorkspaceUid = state.workspaces.activeWorkspaceUid;
+
     dispatch(addTab({
       uid: item.uid,
       collectionUid,
       type: 'ws-request',
-      preview: false // Transient requests should open as permanent tabs
+      preview: false, // Transient requests should open as permanent tabs
+      workspaceUid: activeWorkspaceUid
+    }));
+
+    resolve(item);
+  });
+};
+
+/**
+ * Change the type of a transient request (e.g., HTTP to GraphQL, gRPC, WebSocket)
+ * This creates a new transient item of the target type, copies common data,
+ * removes the old item and its tab, and opens the new item's tab.
+ */
+export const changeTransientRequestType = (params) => (dispatch, getState) => {
+  const { itemUid, collectionUid, targetType } = params;
+
+  return new Promise((resolve, reject) => {
+    const state = getState();
+    const collection = findCollectionByUid(state.collections.collections, collectionUid);
+    if (!collection) {
+      return reject(new Error('Collection not found'));
+    }
+
+    // Find the transient item
+    const oldItem = collection.transientItems?.find((i) => i.uid === itemUid);
+    if (!oldItem) {
+      return reject(new Error('Transient item not found'));
+    }
+
+    // Get common data from old item (use draft if available)
+    const oldRequest = oldItem.draft?.request || oldItem.request;
+    const url = oldRequest.url || '';
+    const headers = oldRequest.headers || [];
+    const auth = oldRequest.auth || { mode: 'inherit' };
+    const name = oldItem.name;
+
+    // Create the new item based on target type
+    let newItem;
+    const newUid = uuid();
+
+    if (targetType === 'http-request') {
+      const parts = splitOnFirst(url, '?');
+      const queryParams = parseQueryParams(parts[1]);
+      each(queryParams, (urlParam) => {
+        urlParam.enabled = true;
+        urlParam.type = 'query';
+      });
+      const pathParams = parsePathParams(url);
+      each(pathParams, (pathParam) => {
+        pathParam.enabled = true;
+        pathParam.type = 'path';
+      });
+
+      newItem = {
+        uid: newUid,
+        type: 'http-request',
+        name,
+        transient: true,
+        request: {
+          method: 'GET',
+          url,
+          headers: cloneDeep(headers),
+          params: [...queryParams, ...pathParams],
+          body: {
+            mode: 'none',
+            json: null,
+            text: null,
+            xml: null,
+            sparql: null,
+            multipartForm: [],
+            formUrlEncoded: [],
+            file: []
+          },
+          vars: { req: [], res: [] },
+          assertions: [],
+          auth: cloneDeep(auth)
+        },
+        settings: { encodeUrl: true }
+      };
+    } else if (targetType === 'graphql-request') {
+      const parts = splitOnFirst(url, '?');
+      const queryParams = parseQueryParams(parts[1]);
+      each(queryParams, (urlParam) => {
+        urlParam.enabled = true;
+        urlParam.type = 'query';
+      });
+      const pathParams = parsePathParams(url);
+      each(pathParams, (pathParam) => {
+        pathParam.enabled = true;
+        pathParam.type = 'path';
+      });
+
+      newItem = {
+        uid: newUid,
+        type: 'graphql-request',
+        name,
+        transient: true,
+        request: {
+          method: 'POST',
+          url,
+          headers: cloneDeep(headers),
+          params: [...queryParams, ...pathParams],
+          body: {
+            mode: 'graphql',
+            graphql: { query: '', variables: '' },
+            json: null,
+            text: null,
+            xml: null,
+            sparql: null,
+            multipartForm: [],
+            formUrlEncoded: [],
+            file: []
+          },
+          vars: { req: [], res: [] },
+          assertions: [],
+          auth: cloneDeep(auth)
+        },
+        settings: { encodeUrl: true }
+      };
+    } else if (targetType === 'grpc-request') {
+      newItem = {
+        uid: newUid,
+        type: 'grpc-request',
+        name,
+        transient: true,
+        request: {
+          url,
+          headers: cloneDeep(headers),
+          body: {
+            mode: 'grpc',
+            grpc: [{ name: 'message 1', content: '{}' }]
+          },
+          auth: cloneDeep(auth),
+          vars: { req: [], res: [] },
+          script: { req: null, res: null },
+          assertions: [],
+          tests: null
+        },
+        settings: { encodeUrl: true }
+      };
+    } else if (targetType === 'ws-request') {
+      newItem = {
+        uid: newUid,
+        type: 'ws-request',
+        name,
+        transient: true,
+        request: {
+          url,
+          method: 'ws',
+          headers: cloneDeep(headers),
+          params: [],
+          body: {
+            mode: 'ws',
+            ws: [{ name: 'message 1', type: 'json', content: '{}' }]
+          },
+          auth: cloneDeep(auth),
+          vars: { req: [], res: [] },
+          script: { req: null, res: null },
+          assertions: [],
+          tests: null
+        },
+        settings: { timeout: 0, keepAliveInterval: 0 }
+      };
+    } else {
+      return reject(new Error(`Unknown target type: ${targetType}`));
+    }
+
+    // Remove old item and close its tab
+    dispatch(removeTransientItem({ collectionUid, itemUid }));
+    dispatch(closeTabs({ tabUids: [itemUid] }));
+
+    // Add new item and open its tab
+    dispatch(addTransientItem({ collectionUid, item: newItem }));
+
+    const activeWorkspaceUid = state.workspaces.activeWorkspaceUid;
+    dispatch(addTab({
+      uid: newItem.uid,
+      collectionUid,
+      type: targetType,
+      preview: false,
+      workspaceUid: activeWorkspaceUid
+    }));
+
+    resolve(newItem);
+  });
+};
+
+// Standalone transient request - creates a request in a virtual collection (not filesystem-backed)
+export const newStandaloneTransientRequest = (params) => (dispatch, getState) => {
+  const { workspaceUid, requestName = 'Untitled', requestType = 'http-request', requestUrl = '', requestMethod = 'GET' } = params;
+
+  return new Promise((resolve, reject) => {
+    const virtualCollectionUid = `virtual-${workspaceUid}`;
+
+    // Get workspace name from state
+    const state = getState();
+    const workspace = state.workspaces.workspaces.find((w) => w.uid === workspaceUid);
+    const workspaceName = workspace?.name;
+
+    // Create or get the virtual collection
+    dispatch(createOrGetVirtualCollection({ workspaceUid, workspaceName }));
+
+    const item = {
+      uid: uuid(),
+      type: requestType,
+      name: requestName,
+      transient: true,
+      request: {
+        method: requestMethod,
+        url: requestUrl,
+        headers: [],
+        params: [],
+        body: {
+          mode: 'none',
+          json: null,
+          text: null,
+          xml: null,
+          sparql: null,
+          multipartForm: [],
+          formUrlEncoded: [],
+          file: []
+        },
+        vars: {
+          req: [],
+          res: []
+        },
+        assertions: [],
+        auth: {
+          mode: 'none'
+        }
+      },
+      settings: {
+        encodeUrl: true
+      }
+    };
+
+    dispatch(addTransientItem({ collectionUid: virtualCollectionUid, item }));
+    // Add tab in the regular tabs slice (reusing RequestTabs component)
+    dispatch(addTab({
+      uid: item.uid,
+      collectionUid: virtualCollectionUid,
+      type: requestType,
+      preview: false,
+      workspaceUid
     }));
 
     resolve(item);
@@ -1797,23 +2065,66 @@ export const saveTransientRequest = (params) => (dispatch, getState) => {
     const fullName = path.join(parentItem.pathname, filename);
     const { ipcRenderer } = window;
 
-    ipcRenderer
-      .invoke('renderer:new-request', fullName, itemToSave, targetCollection.format)
+    // Mount the collection BEFORE creating the file so file watcher can detect it
+    const mountPromise = targetCollection.mountStatus !== 'mounted'
+      ? ipcRenderer.invoke('renderer:mount-collection', {
+          collectionUid: targetCollection.uid,
+          collectionPathname: targetCollection.pathname,
+          brunoConfig: targetCollection.brunoConfig
+        }).then(() => {
+          // Update mount status and loading state in Redux so middleware knows collection is ready
+          dispatch(updateCollectionMountStatus({
+            collectionUid: targetCollection.uid,
+            mountStatus: 'mounted'
+          }));
+          dispatch(updateCollectionLoadingState({
+            collectionUid: targetCollection.uid,
+            isLoading: false
+          }));
+        })
+      : Promise.resolve();
+
+    mountPromise
+      .catch((mountError) => {
+        console.error('Failed to mount target collection:', mountError);
+        // Continue anyway - try to create the file and open tab
+      })
       .then(() => {
+        // Create the request file
+        return ipcRenderer.invoke('renderer:new-request', fullName, itemToSave, targetCollection.format);
+      })
+      .then(() => {
+        // Get active workspace UID for the tab
+        const state = getState();
+        const activeWorkspaceUid = state.workspaces.activeWorkspaceUid;
+
+        // Manually dispatch collectionAddFileEvent to add item to Redux immediately
+        // This allows instant tab opening without waiting for file watcher
+        dispatch(collectionAddFileEvent({
+          file: {
+            meta: {
+              collectionUid: targetCollectionUid,
+              pathname: fullName,
+              name: filename
+            },
+            data: itemToSave
+          }
+        }));
+
+        // Open the tab immediately with the known item UID
+        dispatch(addTab({
+          uid: itemToSave.uid,
+          collectionUid: targetCollectionUid,
+          requestPaneTab: getDefaultRequestPaneTab(itemToSave),
+          preview: false,
+          workspaceUid: activeWorkspaceUid
+        }));
+
         // Close the transient tab
         dispatch(closeTabs({ tabUids: [itemUid] }));
 
         // Remove the transient item from the original collection
         dispatch(removeTransientItem({ collectionUid: originalCollectionUid, itemUid }));
-
-        // Task middleware will open the saved request in the target collection
-        dispatch(insertTaskIntoQueue({
-          uid: uuid(),
-          type: 'OPEN_REQUEST',
-          collectionUid: targetCollectionUid,
-          itemPathname: fullName,
-          openAsPermanent: true
-        }));
 
         resolve();
       })

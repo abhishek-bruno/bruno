@@ -7,11 +7,31 @@ import last from 'lodash/last';
 
 const initialState = {
   tabs: [],
-  activeTabUid: null
+  activeTabUid: null,
+  activeTabUidByWorkspace: {}, // Maps workspaceUid -> activeTabUid for that workspace
+  activeTabUidByCollection: {}, // Maps collectionUid -> activeTabUid for that collection
+  collectionAccessHistory: [] // Stack of collectionUids in access order (most recent last)
 };
 
 const tabTypeAlreadyExists = (tabs, collectionUid, type) => {
   return find(tabs, (tab) => tab.collectionUid === collectionUid && tab.type === type);
+};
+
+/**
+ * Updates collection access history by moving collectionUid to end (most recent).
+ * Limits history to last 20 collections to prevent unbounded growth.
+ */
+const updateCollectionAccessHistory = (history, collectionUid) => {
+  if (!collectionUid) return history;
+
+  // Remove existing occurrence
+  const filtered = history.filter((uid) => uid !== collectionUid);
+
+  // Add to end (most recent)
+  const updated = [...filtered, collectionUid];
+
+  // Keep only last 20 items
+  return updated.slice(-20);
 };
 
 export const tabsSlice = createSlice({
@@ -19,13 +39,16 @@ export const tabsSlice = createSlice({
   initialState,
   reducers: {
     addTab: (state, action) => {
-      const { uid, collectionUid, type, requestPaneTab, preview, exampleUid, itemUid } = action.payload;
+      const { uid, collectionUid, type, requestPaneTab, preview, exampleUid, itemUid, insertFirst, workspaceUid } = action.payload;
 
       const nonReplaceableTabTypes = [
         'variables',
         'collection-runner',
         'environment-settings',
-        'global-environment-settings'
+        'global-environment-settings',
+        'workspace-overview',
+        'workspace-git',
+        'workspace-environments'
       ];
 
       const existingTab = find(state.tabs, (tab) => tab.uid === uid);
@@ -51,10 +74,11 @@ export const tabsSlice = createSlice({
       }
 
       const lastTab = state.tabs[state.tabs.length - 1];
-      if (state.tabs.length > 0 && lastTab.preview) {
+      if (state.tabs.length > 0 && lastTab.preview && lastTab.workspaceUid === workspaceUid) {
         state.tabs[state.tabs.length - 1] = {
           uid,
           collectionUid,
+          workspaceUid,
           requestPaneWidth: null,
           requestPaneTab: requestPaneTab || defaultRequestPaneTab,
           responsePaneTab: 'response',
@@ -70,12 +94,20 @@ export const tabsSlice = createSlice({
         };
 
         state.activeTabUid = uid;
+        // Update per-workspace and per-collection active tab
+        if (workspaceUid) {
+          state.activeTabUidByWorkspace[workspaceUid] = uid;
+        }
+        if (collectionUid) {
+          state.activeTabUidByCollection[collectionUid] = uid;
+        }
         return;
       }
 
-      state.tabs.push({
+      const newTab = {
         uid,
         collectionUid,
+        workspaceUid,
         requestPaneWidth: null,
         requestPaneTab: requestPaneTab || defaultRequestPaneTab,
         responsePaneTab: 'response',
@@ -89,11 +121,49 @@ export const tabsSlice = createSlice({
           : !nonReplaceableTabTypes.includes(type),
         ...(exampleUid ? { exampleUid } : {}),
         ...(itemUid ? { itemUid } : {})
-      });
+      };
+
+      if (insertFirst) {
+        state.tabs.unshift(newTab);
+      } else {
+        state.tabs.push(newTab);
+      }
       state.activeTabUid = uid;
+      // Update per-workspace and per-collection active tab
+      if (workspaceUid) {
+        state.activeTabUidByWorkspace[workspaceUid] = uid;
+      }
+      if (collectionUid) {
+        state.activeTabUidByCollection[collectionUid] = uid;
+      }
+      // Track collection access when adding tab
+      if (collectionUid) {
+        state.collectionAccessHistory = updateCollectionAccessHistory(
+          state.collectionAccessHistory,
+          collectionUid
+        );
+      }
     },
     focusTab: (state, action) => {
-      state.activeTabUid = action.payload.uid;
+      const { uid } = action.payload;
+      state.activeTabUid = uid;
+      // Update per-workspace and per-collection active tab
+      const tab = find(state.tabs, (t) => t.uid === uid);
+      if (tab) {
+        if (tab.workspaceUid) {
+          state.activeTabUidByWorkspace[tab.workspaceUid] = uid;
+        }
+        if (tab.collectionUid) {
+          state.activeTabUidByCollection[tab.collectionUid] = uid;
+        }
+      }
+      // Track collection access when focusing tab
+      if (tab && tab.collectionUid) {
+        state.collectionAccessHistory = updateCollectionAccessHistory(
+          state.collectionAccessHistory,
+          tab.collectionUid
+        );
+      }
     },
     switchTab: (state, action) => {
       if (!state.tabs || !state.tabs.length) {
@@ -167,26 +237,94 @@ export const tabsSlice = createSlice({
     closeTabs: (state, action) => {
       const activeTab = find(state.tabs, (t) => t.uid === state.activeTabUid);
       const tabUids = action.payload.tabUids || [];
+      const workspaceUid = action.payload.workspaceUid;
 
       // remove the tabs from the state
       state.tabs = filter(state.tabs, (t) => !tabUids.includes(t.uid));
 
       if (activeTab && state.tabs.length) {
         const { collectionUid } = activeTab;
+        const closedTabWorkspaceUid = activeTab.workspaceUid;
         const activeTabStillExists = find(state.tabs, (t) => t.uid === state.activeTabUid);
 
         // if the active tab no longer exists, set the active tab to the last tab in the list
         // this implies that the active tab was closed
         if (!activeTabStillExists) {
-          // load sibling tabs of the current collection
-          const siblingTabs = filter(state.tabs, (t) => t.collectionUid === collectionUid);
+          const workspaceToUse = workspaceUid || closedTabWorkspaceUid;
+          const workspaceTabs = workspaceToUse
+            ? filter(state.tabs, (t) => t.workspaceUid === workspaceToUse)
+            : state.tabs;
 
-          // if there are sibling tabs, set the active tab to the last sibling tab
-          // otherwise, set the active tab to the last tab in the list
+          // Check if closed tab was from virtual collection
+          const isVirtualCollection = collectionUid && collectionUid.startsWith('virtual-');
+
+          // First, try sibling tabs in same collection
+          const siblingTabs = filter(workspaceTabs, (t) => t.collectionUid === collectionUid);
+
           if (siblingTabs && siblingTabs.length) {
+            // Activate last sibling tab
             state.activeTabUid = last(siblingTabs).uid;
+          } else if (isVirtualCollection) {
+            // VIRTUAL WORKSPACE: No fallback, stay in empty state
+            state.activeTabUid = null;
           } else {
-            state.activeTabUid = last(state.tabs).uid;
+            // REGULAR COLLECTION: Try to fallback to previously opened collection
+
+            // Filter history to collections with open tabs in current workspace
+            const collectionsWithTabs = new Set(
+              workspaceTabs.map((t) => t.collectionUid)
+            );
+
+            // Find most recent collection in history (iterate backwards)
+            let previousCollectionUid = null;
+            for (let i = state.collectionAccessHistory.length - 1; i >= 0; i--) {
+              const historyCollectionUid = state.collectionAccessHistory[i];
+              if (historyCollectionUid !== collectionUid
+                && collectionsWithTabs.has(historyCollectionUid)) {
+                previousCollectionUid = historyCollectionUid;
+                break;
+              }
+            }
+
+            if (previousCollectionUid) {
+              // Fallback to previously opened collection
+              const previousCollectionTabs = filter(
+                workspaceTabs,
+                (t) => t.collectionUid === previousCollectionUid
+              );
+
+              // Try to restore last active tab in that collection
+              const lastActiveTabUid = state.activeTabUidByCollection[previousCollectionUid];
+              const lastActiveTab = lastActiveTabUid
+                ? find(previousCollectionTabs, (t) => t.uid === lastActiveTabUid)
+                : null;
+
+              if (lastActiveTab) {
+                state.activeTabUid = lastActiveTab.uid;
+              } else if (previousCollectionTabs.length > 0) {
+                state.activeTabUid = last(previousCollectionTabs).uid;
+              } else {
+                // Fallback to any workspace tab
+                state.activeTabUid = workspaceTabs.length > 0 ? last(workspaceTabs).uid : null;
+              }
+            } else if (workspaceTabs && workspaceTabs.length) {
+              // No previous collection found, use any workspace tab
+              state.activeTabUid = last(workspaceTabs).uid;
+            } else {
+              // No tabs in workspace - show WorkspaceHome
+              state.activeTabUid = null;
+            }
+          }
+
+          // Update per-workspace and per-collection active tab tracking
+          if (workspaceToUse && state.activeTabUid) {
+            state.activeTabUidByWorkspace[workspaceToUse] = state.activeTabUid;
+            const newActiveTab = find(state.tabs, (t) => t.uid === state.activeTabUid);
+            if (newActiveTab && newActiveTab.collectionUid) {
+              state.activeTabUidByCollection[newActiveTab.collectionUid] = state.activeTabUid;
+            }
+          } else if (workspaceToUse) {
+            state.activeTabUidByWorkspace[workspaceToUse] = null;
           }
         }
       }
@@ -247,6 +385,80 @@ export const tabsSlice = createSlice({
       if (tab) {
         tab.showSaveTransientModal = false;
       }
+    },
+    // Switch workspace context: save current workspace's activeTabUid and restore target workspace's
+    switchWorkspaceContext: (state, action) => {
+      const { fromWorkspaceUid, toWorkspaceUid } = action.payload;
+
+      // Save current workspace's active tab if there is one
+      if (fromWorkspaceUid && state.activeTabUid) {
+        const currentTab = find(state.tabs, (t) => t.uid === state.activeTabUid);
+        if (currentTab && currentTab.workspaceUid === fromWorkspaceUid) {
+          state.activeTabUidByWorkspace[fromWorkspaceUid] = state.activeTabUid;
+        }
+      }
+
+      // Restore target workspace's active tab if it exists
+      const targetActiveTabUid = state.activeTabUidByWorkspace[toWorkspaceUid];
+      if (targetActiveTabUid) {
+        const targetTab = find(state.tabs, (t) => t.uid === targetActiveTabUid);
+        if (targetTab) {
+          state.activeTabUid = targetActiveTabUid;
+          return;
+        }
+      }
+
+      // If no saved active tab for target workspace, find the first tab for that workspace
+      const workspaceTabs = filter(state.tabs, (t) => t.workspaceUid === toWorkspaceUid);
+      if (workspaceTabs.length > 0) {
+        state.activeTabUid = workspaceTabs[0].uid;
+        state.activeTabUidByWorkspace[toWorkspaceUid] = workspaceTabs[0].uid;
+      } else {
+        // No tabs for this workspace - set activeTabUid to null so WorkspaceHome is shown
+        state.activeTabUid = null;
+      }
+    },
+    // Switch collection context: save current collection's activeTabUid and restore target collection's
+    switchCollectionContext: (state, action) => {
+      const { fromCollectionUid, toCollectionUid } = action.payload;
+
+      // Save current collection's active tab if there is one
+      if (fromCollectionUid && state.activeTabUid) {
+        const currentTab = find(state.tabs, (t) => t.uid === state.activeTabUid);
+        if (currentTab && currentTab.collectionUid === fromCollectionUid) {
+          state.activeTabUidByCollection[fromCollectionUid] = state.activeTabUid;
+        }
+      }
+
+      // Restore target collection's active tab if it exists
+      const targetActiveTabUid = state.activeTabUidByCollection[toCollectionUid];
+      if (targetActiveTabUid) {
+        const targetTab = find(state.tabs, (t) => t.uid === targetActiveTabUid);
+        if (targetTab) {
+          state.activeTabUid = targetActiveTabUid;
+          // Track collection access
+          state.collectionAccessHistory = updateCollectionAccessHistory(
+            state.collectionAccessHistory,
+            toCollectionUid
+          );
+          return;
+        }
+      }
+
+      // If no saved active tab for target collection, find the first tab for that collection
+      const collectionTabs = filter(state.tabs, (t) => t.collectionUid === toCollectionUid);
+      if (collectionTabs.length > 0) {
+        state.activeTabUid = collectionTabs[0].uid;
+        state.activeTabUidByCollection[toCollectionUid] = collectionTabs[0].uid;
+      } else {
+        // No tabs for this collection - set activeTabUid to null so WorkspaceHome is shown
+        state.activeTabUid = null;
+      }
+      // Track collection access
+      state.collectionAccessHistory = updateCollectionAccessHistory(
+        state.collectionAccessHistory,
+        toCollectionUid
+      );
     }
   }
 });
@@ -267,7 +479,9 @@ export const {
   makeTabPermanent,
   reorderTabs,
   triggerSaveTransientModal,
-  clearSaveTransientModal
+  clearSaveTransientModal,
+  switchWorkspaceContext,
+  switchCollectionContext
 } = tabsSlice.actions;
 
 export default tabsSlice.reducer;

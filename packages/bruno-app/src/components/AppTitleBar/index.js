@@ -4,9 +4,11 @@ import { forwardRef, useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useDispatch, useSelector } from 'react-redux';
 
-import { savePreferences, showHomePage, showManageWorkspacePage, toggleSidebarCollapse } from 'providers/ReduxStore/slices/app';
+import { savePreferences, hideHomePage, hideManageWorkspacePage, hideApiSpecPage, showManageWorkspacePage, toggleSidebarCollapse } from 'providers/ReduxStore/slices/app';
 import { closeConsole, openConsole } from 'providers/ReduxStore/slices/logs';
 import { openWorkspaceDialog, switchWorkspace } from 'providers/ReduxStore/slices/workspaces/actions';
+import { switchCollectionContext } from 'providers/ReduxStore/slices/tabs';
+import { createOrGetVirtualCollection } from 'providers/ReduxStore/slices/collections';
 import { sortWorkspaces, toggleWorkspacePin } from 'utils/workspaces';
 
 import Bruno from 'components/Bruno';
@@ -108,6 +110,8 @@ const AppTitleBar = () => {
   const preferences = useSelector((state) => state.app.preferences);
   const sidebarCollapsed = useSelector((state) => state.app.sidebarCollapsed);
   const isConsoleOpen = useSelector((state) => state.logs.isConsoleOpen);
+  const tabs = useSelector((state) => state.tabs.tabs);
+  const activeTabUid = useSelector((state) => state.tabs.activeTabUid);
   const activeWorkspace = workspaces.find((w) => w.uid === activeWorkspaceUid);
 
   // Sort workspaces according to preferences
@@ -128,7 +132,21 @@ const AppTitleBar = () => {
   });
 
   const handleHomeClick = () => {
-    dispatch(showHomePage());
+    // Switch to workspace virtual collection context
+    if (activeWorkspaceUid && activeWorkspace) {
+      const virtualCollectionUid = `virtual-${activeWorkspaceUid}`;
+      dispatch(createOrGetVirtualCollection({ workspaceUid: activeWorkspaceUid, workspaceName: activeWorkspace.name }));
+
+      // Get current collection uid to save its state
+      const currentTab = tabs.find((t) => t.uid === activeTabUid);
+      const fromCollectionUid = currentTab?.collectionUid;
+
+      // Switch to virtual collection context - this will restore the last focused tab
+      dispatch(switchCollectionContext({
+        fromCollectionUid,
+        toCollectionUid: virtualCollectionUid
+      }));
+    }
   };
 
   const handleWorkspaceSwitch = (workspaceUid) => {

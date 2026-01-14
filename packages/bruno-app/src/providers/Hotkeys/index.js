@@ -25,6 +25,8 @@ export const HotkeysProvider = (props) => {
   const tabs = useSelector((state) => state.tabs.tabs);
   const collections = useSelector((state) => state.collections.collections);
   const activeTabUid = useSelector((state) => state.tabs.activeTabUid);
+  const isEnvironmentSettingsModalOpen = useSelector((state) => state.app.isEnvironmentSettingsModalOpen);
+  const isGlobalEnvironmentSettingsModalOpen = useSelector((state) => state.app.isGlobalEnvironmentSettingsModalOpen);
   const [showNewRequestModal, setShowNewRequestModal] = useState(false);
   const [showGlobalSearchModal, setShowGlobalSearchModal] = useState(false);
 
@@ -41,7 +43,8 @@ export const HotkeysProvider = (props) => {
   useEffect(() => {
     Mousetrap.bind([...getKeyBindingsForActionAllOS('save')], (e) => {
       if (isEnvironmentSettingsModalOpen || isGlobalEnvironmentSettingsModalOpen) {
-        console.log('todo: save environment settings');
+        window.dispatchEvent(new CustomEvent('environment-save'));
+        return false;
       } else {
         const activeTab = find(tabs, (t) => t.uid === activeTabUid);
         if (activeTab) {

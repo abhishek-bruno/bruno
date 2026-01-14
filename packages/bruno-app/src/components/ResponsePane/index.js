@@ -213,7 +213,7 @@ const ResponsePane = ({ item, collection }) => {
   if (!item.response && !requestTimeline?.length) {
     return (
       <HeightBoundContainer>
-        <Placeholder />
+        <Placeholder item={item} collection={collection} />
       </HeightBoundContainer>
     );
   }

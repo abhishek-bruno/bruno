@@ -23,7 +23,7 @@ const DefaultTab = ({ setTab }) => (
   </div>
 );
 
-const WorkspaceEnvironments = ({ workspace }) => {
+const WorkspaceEnvironments = () => {
   const [isModified, setIsModified] = useState(false);
   const [selectedEnvironment, setSelectedEnvironment] = useState(null);
   const [tab, setTab] = useState('default');

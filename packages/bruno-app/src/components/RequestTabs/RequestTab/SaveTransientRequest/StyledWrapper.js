@@ -138,7 +138,7 @@ const StyledWrapper = styled.div`
     }
 
     &:hover {
-      background: ${(props) => props.theme.listItem.hoverBg};
+      background: ${(props) => props.theme.dropdown.hoverBg};
     }
 
     .folder-icon {

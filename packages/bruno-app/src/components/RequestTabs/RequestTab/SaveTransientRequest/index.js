@@ -7,6 +7,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { saveTransientRequest, newFolder } from 'providers/ReduxStore/slices/collections/actions';
 import { validateName, validateNameError, sanitizeName } from 'utils/common/regex';
 import { IconFolder, IconFolderPlus, IconFilter, IconChevronRight, IconX, IconCheck, IconBooks } from '@tabler/icons';
+import Button from 'ui/Button';
 import StyledWrapper from './StyledWrapper';
 
 const SaveTransientRequest = ({ item, collection: defaultCollection, onClose }) => {
@@ -14,16 +15,73 @@ const SaveTransientRequest = ({ item, collection: defaultCollection, onClose }) 
   const inputRef = useRef();
   const newFolderInputRef = useRef();
   const collections = useSelector((state) => state.collections.collections);
+  const { activeWorkspaceUid, workspaces } = useSelector((state) => state.workspaces);
+
+  // Get the active workspace
+  const activeWorkspace = useMemo(() => {
+    return workspaces.find((w) => w.uid === activeWorkspaceUid);
+  }, [workspaces, activeWorkspaceUid]);
+
+  // Filter collections to Exclude virtual collections (workspace home)
+  const availableCollections = useMemo(() => {
+    if (!activeWorkspace) return [];
+
+    // Get collection paths from the active workspace and normalize them
+    const workspaceCollectionPaths = new Set(
+      (activeWorkspace.collections || []).map((c) => c.path)
+    );
+
+    return collections.filter((col) => {
+      // Exclude virtual collections
+      if (col.virtual === true) return false;
+
+      // Only show collections that belong to the active workspace
+      // Match by pathname since workspace collections store path
+      if (!workspaceCollectionPaths.has(col.pathname)) return false;
+
+      return true;
+    });
+  }, [collections, activeWorkspace]);
 
   // Navigation state - store UIDs and derive objects from Redux to stay in sync
-  const [selectedCollectionUid, setSelectedCollectionUid] = useState(defaultCollection?.uid);
+  const [selectedCollectionUid, setSelectedCollectionUid] = useState(
+    defaultCollection?.virtual ? null : defaultCollection?.uid
+  );
   const [navigationPathUids, setNavigationPathUids] = useState([]); // Array of folder UIDs
+  const [loadingCollectionStructure, setLoadingCollectionStructure] = useState(false);
 
   // Derive selectedCollection from Redux to get fresh data when folders are created
   const selectedCollection = useMemo(() => {
     if (!selectedCollectionUid) return null;
     return collections.find((c) => c.uid === selectedCollectionUid);
   }, [collections, selectedCollectionUid]);
+
+  // Load collection structure if items are empty (for unmounted collections)
+  useEffect(() => {
+    if (!selectedCollection) return;
+    if (!selectedCollection.items || selectedCollection.items.length > 0) return;
+    if (loadingCollectionStructure) return;
+
+    const loadStructure = async () => {
+      setLoadingCollectionStructure(true);
+      try {
+        const { ipcRenderer } = window;
+        // Mount collection to load its structure
+        await ipcRenderer.invoke('renderer:mount-collection', {
+          collectionUid: selectedCollection.uid,
+          collectionPathname: selectedCollection.pathname,
+          brunoConfig: selectedCollection.brunoConfig
+        });
+      } catch (error) {
+        console.error('Failed to load collection structure:', error);
+        toast.error('Failed to load collection folders');
+      } finally {
+        setLoadingCollectionStructure(false);
+      }
+    };
+
+    loadStructure();
+  }, [selectedCollectionUid]);
 
   // Derive navigationPath from UIDs by looking up in current collection
   const navigationPath = useMemo(() => {
@@ -286,9 +344,9 @@ const SaveTransientRequest = ({ item, collection: defaultCollection, onClose }) 
             {/* Item List */}
             <div className="folder-list">
               {!selectedCollection ? (
-                // Show collections list
+                // Show collections list (filtered to exclude virtual collections and workspace-filtered)
                 <>
-                  {collections
+                  {availableCollections
                     .filter((col) => !searchQuery || col.name.toLowerCase().includes(searchQuery.toLowerCase()))
                     .map((col) => (
                       <div key={col.uid} className="folder-item" onClick={() => selectCollection(col)}>
@@ -297,10 +355,13 @@ const SaveTransientRequest = ({ item, collection: defaultCollection, onClose }) 
                         <IconChevronRight size={14} className="chevron-icon" />
                       </div>
                     ))}
-                  {collections.length === 0 && (
-                    <div className="empty-state">No collections found</div>
+                  {availableCollections.length === 0 && (
+                    <div className="empty-state">No collections found in this workspace</div>
                   )}
                 </>
+              ) : loadingCollectionStructure ? (
+                // Show loading indicator while collection structure is being loaded
+                <div className="empty-state">Loading folders...</div>
               ) : (
                 // Show folders and requests in current location
                 <>
@@ -384,23 +445,24 @@ const SaveTransientRequest = ({ item, collection: defaultCollection, onClose }) 
           <div className="modal-footer-custom">
             <div className="footer-left">
               {selectedCollection && (
-                <button
-                  type="button"
-                  className="btn-new-folder"
+                <Button
+                  variant="outlined"
+                  color="secondary"
+                  size="sm"
+                  icon={<IconFolderPlus size={14} />}
                   onClick={() => setIsCreatingFolder(true)}
                 >
-                  <IconFolderPlus size={14} />
-                  <span>New Folder</span>
-                </button>
+                  New Folder
+                </Button>
               )}
             </div>
             <div className="footer-right">
-              <button type="button" className="btn btn-md btn-close" onClick={onClose}>
+              <Button variant="outlined" color="secondary" size="sm" onClick={onClose}>
                 Cancel
-              </button>
-              <button type="submit" className="btn btn-md btn-secondary" disabled={!selectedCollection}>
+              </Button>
+              <Button type="submit" variant="filled" color="primary" size="sm" disabled={!selectedCollection}>
                 Save
-              </button>
+              </Button>
             </div>
           </div>
         </form>

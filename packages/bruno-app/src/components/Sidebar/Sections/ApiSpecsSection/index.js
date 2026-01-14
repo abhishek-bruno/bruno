@@ -6,6 +6,7 @@ import { IconFileCode, IconPlus } from '@tabler/icons';
 import { openApiSpec } from 'providers/ReduxStore/slices/apiSpec';
 import MenuDropdown from 'ui/MenuDropdown';
 import ActionIcon from 'ui/ActionIcon';
+import ToolHint from 'components/ToolHint';
 import CreateApiSpec from 'components/Sidebar/ApiSpecs/CreateApiSpec';
 import ApiSpecs from 'components/Sidebar/ApiSpecs';
 import SidebarSection from 'components/Sidebar/SidebarSection';
@@ -13,6 +14,7 @@ import SidebarSection from 'components/Sidebar/SidebarSection';
 const ApiSpecsSection = () => {
   const dispatch = useDispatch();
   const [createApiSpecModalOpen, setCreateApiSpecModalOpen] = useState(false);
+  const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
 
   const handleOpenApiSpec = () => {
     dispatch(openApiSpec()).catch((err) => {
@@ -46,12 +48,23 @@ const ApiSpecsSection = () => {
         data-testid="api-specs-header-add-menu"
         items={addDropdownItems}
         placement="bottom-end"
+        onShow={() => setIsAddMenuOpen(true)}
+        onHide={() => setIsAddMenuOpen(false)}
       >
-        <ActionIcon
-          label="Add new API Spec"
-        >
-          <IconPlus size={14} stroke={1.5} aria-hidden="true" />
-        </ActionIcon>
+        <div>
+          <ToolHint
+            text="Add new API Spec"
+            toolhintId="sidebar-add-api-spec"
+            place="top"
+            delayShow={800}
+            hidden={isAddMenuOpen}
+            positionStrategy="fixed"
+          >
+            <ActionIcon>
+              <IconPlus size={14} stroke={1.5} aria-hidden="true" />
+            </ActionIcon>
+          </ToolHint>
+        </div>
       </MenuDropdown>
     </>
   );

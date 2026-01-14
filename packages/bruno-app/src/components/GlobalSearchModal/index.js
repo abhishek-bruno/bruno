@@ -28,6 +28,7 @@ const GlobalSearchModal = ({ isOpen, onClose }) => {
 
   const collections = useSelector((state) => state.collections.collections);
   const tabs = useSelector((state) => state.tabs.tabs);
+  const activeWorkspaceUid = useSelector((state) => state.workspaces.activeWorkspaceUid);
 
   const createCollectionResults = () => {
     const collectionResults = collections.map((collection) => ({
@@ -254,20 +255,23 @@ const GlobalSearchModal = ({ isOpen, onClose }) => {
           uid: result.item.uid,
           collectionUid: result.collectionUid,
           requestPaneTab: getDefaultRequestPaneTab(result.item),
-          type: 'request'
+          type: 'request',
+          workspaceUid: activeWorkspaceUid
         }));
       }
     } else if (result.type === SEARCH_TYPES.FOLDER) {
       dispatch(addTab({
         uid: result.item.uid,
         collectionUid: result.collectionUid,
-        type: 'folder-settings'
+        type: 'folder-settings',
+        workspaceUid: activeWorkspaceUid
       }));
     } else if (result.type === SEARCH_TYPES.COLLECTION) {
       dispatch(addTab({
         uid: result.item.uid,
         collectionUid: result.collectionUid,
-        type: 'collection-settings'
+        type: 'collection-settings',
+        workspaceUid: activeWorkspaceUid
       }));
     }
 

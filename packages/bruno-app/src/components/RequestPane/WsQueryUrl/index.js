@@ -16,6 +16,7 @@ import { interpolateUrl } from 'utils/url';
 import { getAllVariables } from 'utils/collections';
 import useDebounce from 'hooks/useDebounce';
 import get from 'lodash/get';
+import TransientRequestTypeSelector from '../QueryUrl/TransientRequestTypeSelector';
 
 const CONNECTION_STATUS = {
   CONNECTING: 'connecting',
@@ -43,9 +44,23 @@ const WsQueryUrl = ({ item, collection, handleRun }) => {
   // TODO: reaper, better state for connecting
   const saveShortcut = isMacOS() ? '⌘S' : 'Ctrl+S';
   const hasChanges = useMemo(() => hasRequestChanges(item), [item]);
+  const editorRef = useRef(null);
+  const prevItemUid = useRef(null);
 
   const [connectionStatus, setConnectionStatus] = useWsConnectionStatus(item.uid);
   const url = item.draft ? get(item, 'draft.request.url', '') : get(item, 'request.url', '');
+
+  // Auto-focus URL bar when a new request is created (empty URL)
+  useEffect(() => {
+    if (item?.uid !== prevItemUid.current) {
+      prevItemUid.current = item?.uid;
+      if (!url && editorRef.current?.editor) {
+        setTimeout(() => {
+          editorRef.current?.editor?.focus();
+        }, 50);
+      }
+    }
+  }, [item?.uid, url]);
 
   const allVariables = useMemo(() => {
     return getAllVariables(collection, item);
@@ -62,7 +77,8 @@ const WsQueryUrl = ({ item, collection, handleRun }) => {
 
   const handleConnect = async () => {
     dispatch(wsConnectOnly(item, collection.uid));
-    previousDeboundedInterpolatedURL.current = debouncedInterpolatedURL;
+    // Note: previousDeboundedInterpolatedURL is updated in the effect below
+    // after the connection is confirmed, to avoid race conditions
   };
 
   const handleDisconnect = async (e, notify) => {
@@ -109,7 +125,6 @@ const WsQueryUrl = ({ item, collection, handleRun }) => {
 
   const handleUrlChange = (value) => {
     const finalUrl = value?.trim() ?? value;
-    console.log('finalUrl: ', finalUrl);
     dispatch(requestUrlChanged({
       itemUid: item.uid,
       collectionUid: collection.uid,
@@ -120,8 +135,15 @@ const WsQueryUrl = ({ item, collection, handleRun }) => {
   // Detect interpolated URL changes and reconnect if connection is active
   useEffect(() => {
     if (connectionStatus !== 'connected') return;
-    if (previousDeboundedInterpolatedURL.current === debouncedInterpolatedURL) return;
+
+    // Always update ref when connected (to track current connected URL)
+    const previousUrl = previousDeboundedInterpolatedURL.current;
+    previousDeboundedInterpolatedURL.current = debouncedInterpolatedURL;
+
+    // Skip reconnect on initial connection (previous was empty or same as current)
+    if (!previousUrl || previousUrl === debouncedInterpolatedURL) return;
     if (debouncedInterpolatedURL === '') return;
+
     handleReconnect();
   }, [debouncedInterpolatedURL, connectionStatus]);
 
@@ -133,6 +155,7 @@ const WsQueryUrl = ({ item, collection, handleRun }) => {
             <span className="text-xs font-medium method-ws">WS</span>
           </div>
           <SingleLineEditor
+            ref={editorRef}
             value={url}
             onSave={(finalValue) => onSave(finalValue)}
             onChange={handleUrlChange}
@@ -143,6 +166,9 @@ const WsQueryUrl = ({ item, collection, handleRun }) => {
             collection={collection}
             item={item}
           />
+          {item.transient && (
+            <TransientRequestTypeSelector item={item} collection={collection} />
+          )}
           <div className="flex items-center h-full cursor-pointer gap-3 mx-3">
             <div
               className="infotip"

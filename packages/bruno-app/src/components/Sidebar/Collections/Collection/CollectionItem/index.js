@@ -67,6 +67,7 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText })
   const isSidebarDragging = useSelector((state) => state.app.isDragging);
   const collection = useSelector((state) => state.collections.collections?.find((c) => c.uid === collectionUid));
   const { hasCopiedItems } = useSelector((state) => state.app.clipboard);
+  const activeWorkspaceUid = useSelector((state) => state.workspaces.activeWorkspaceUid);
   const dispatch = useDispatch();
 
   // We use a single ref for drag and drop.
@@ -229,7 +230,8 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText })
           uid: item.uid,
           collectionUid: collectionUid,
           requestPaneTab: getDefaultRequestPaneTab(item),
-          type: 'request'
+          type: 'request',
+          workspaceUid: activeWorkspaceUid
         })
       );
     } else {
@@ -237,7 +239,8 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText })
         addTab({
           uid: item.uid,
           collectionUid: collectionUid,
-          type: 'folder-settings'
+          type: 'folder-settings',
+          workspaceUid: activeWorkspaceUid
         })
       );
       if (item.collapsed) {
@@ -526,7 +529,8 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText })
         addTab({
           uid: item.uid,
           collectionUid,
-          type: 'folder-settings'
+          type: 'folder-settings',
+          workspaceUid: activeWorkspaceUid
         })
       );
     }

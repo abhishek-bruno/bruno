@@ -11,10 +11,11 @@ const ToolHint = ({
   place = 'top',
   hidden = false,
   offset,
-  positionStrategy,
+  positionStrategy = 'absolute',
   theme = null,
   className = '',
-  delayShow = 200
+  delayShow = 200,
+  ...restProps
 }) => {
   const { theme: contextTheme } = useTheme();
   const appliedTheme = theme || contextTheme;
@@ -41,7 +42,8 @@ const ToolHint = ({
       {anchorSelect && children}
       <ReactToolHint
         {...toolhintProps_final}
-        content={anchorSelect ? undefined : text}
+        {...restProps}
+        content={text}
         className="toolhint"
         offset={offset}
         place={place}

@@ -2,11 +2,15 @@ import { createSlice } from '@reduxjs/toolkit';
 import filter from 'lodash/filter';
 import find from 'lodash/find';
 import last from 'lodash/last';
+import { uuid } from 'utils/common';
 
 const initialState = {
   tabs: [],
   activeTabUid: null
 };
+
+// Request types that should be treated as request tabs
+const REQUEST_TAB_TYPES = ['http-request', 'graphql-request', 'grpc-request', 'ws-request'];
 
 export const workspaceTabsSlice = createSlice({
   name: 'workspaceTabs',
@@ -45,12 +49,6 @@ export const workspaceTabsSlice = createSlice({
     },
     closeWorkspaceTab: (state, action) => {
       const tabUid = action.payload.uid;
-      const tab = find(state.tabs, (t) => t.uid === tabUid);
-
-      // Don't allow closing permanent tabs
-      if (tab?.permanent) {
-        return;
-      }
 
       state.tabs = filter(state.tabs, (t) => t.uid !== tabUid);
 
@@ -64,16 +62,10 @@ export const workspaceTabsSlice = createSlice({
     closeWorkspaceTabs: (state, action) => {
       const tabUids = action.payload.tabUids || [];
 
-      // Filter out permanent tabs from the close request
-      const tabsToClose = tabUids.filter((uid) => {
-        const tab = find(state.tabs, (t) => t.uid === uid);
-        return tab && !tab.permanent;
-      });
-
-      state.tabs = filter(state.tabs, (t) => !tabsToClose.includes(t.uid));
+      state.tabs = filter(state.tabs, (t) => !tabUids.includes(t.uid));
 
       // If active tab was closed, activate another one
-      if (tabsToClose.includes(state.activeTabUid)) {
+      if (tabUids.includes(state.activeTabUid)) {
         if (state.tabs.length > 0) {
           state.activeTabUid = last(state.tabs).uid;
         } else {
@@ -85,14 +77,11 @@ export const workspaceTabsSlice = createSlice({
       const workspaceUid = action.payload?.workspaceUid;
 
       if (workspaceUid) {
-        // Close non-permanent tabs for specific workspace
-        state.tabs = filter(
-          state.tabs,
-          (t) => t.workspaceUid !== workspaceUid || t.permanent
-        );
+        // Close all tabs for specific workspace
+        state.tabs = filter(state.tabs, (t) => t.workspaceUid !== workspaceUid);
       } else {
-        // Close all non-permanent tabs
-        state.tabs = filter(state.tabs, (t) => t.permanent);
+        // Close all tabs
+        state.tabs = [];
       }
 
       // If active tab was closed, activate another one
@@ -108,12 +97,6 @@ export const workspaceTabsSlice = createSlice({
       const sourceIdx = tabs.findIndex((t) => t.uid === sourceUid);
       const targetIdx = tabs.findIndex((t) => t.uid === targetUid);
 
-      // Don't reorder permanent tabs
-      const sourceTab = tabs[sourceIdx];
-      if (sourceTab?.permanent) {
-        return;
-      }
-
       if (sourceIdx < 0 || targetIdx < 0 || sourceIdx === targetIdx) {
         return;
       }
@@ -124,22 +107,21 @@ export const workspaceTabsSlice = createSlice({
       state.tabs = tabs;
     },
     initializeWorkspaceTabs: (state, action) => {
-      const { workspaceUid, permanentTabs } = action.payload;
+      const { workspaceUid, defaultTabs } = action.payload;
 
-      // Check if permanent tabs already exist for this workspace
-      const existingPermanentTabs = state.tabs.filter(
-        (t) => t.workspaceUid === workspaceUid && t.permanent
+      // Check if any tabs already exist for this workspace
+      const existingTabs = state.tabs.filter(
+        (t) => t.workspaceUid === workspaceUid
       );
 
-      if (existingPermanentTabs.length === 0) {
-        // Add permanent tabs
-        permanentTabs.forEach((tab) => {
+      if (existingTabs.length === 0 && defaultTabs && defaultTabs.length > 0) {
+        // Add default tabs (not permanent, can be closed)
+        defaultTabs.forEach((tab) => {
           state.tabs.push({
             uid: `${workspaceUid}-${tab.type}`,
             workspaceUid,
             type: tab.type,
-            label: tab.label,
-            permanent: true
+            label: tab.label
           });
         });
       }
@@ -176,6 +158,36 @@ export const workspaceTabsSlice = createSlice({
       }
 
       state.activeTabUid = tab.uid;
+    },
+    // Add a request tab (for transient requests in virtual collection)
+    addRequestTab: (state, action) => {
+      const { workspaceUid, itemUid, collectionUid, type = 'http-request', label = 'Untitled' } = action.payload;
+
+      // Check if tab for this item already exists
+      const existingTab = find(state.tabs, (t) => t.itemUid === itemUid);
+      if (existingTab) {
+        state.activeTabUid = existingTab.uid;
+        return;
+      }
+
+      const tabUid = uuid();
+      state.tabs.push({
+        uid: tabUid,
+        workspaceUid,
+        type,
+        label,
+        itemUid,
+        collectionUid
+      });
+      state.activeTabUid = tabUid;
+    },
+    // Update request tab label (when request name changes)
+    updateRequestTabLabel: (state, action) => {
+      const { itemUid, label } = action.payload;
+      const tab = find(state.tabs, (t) => t.itemUid === itemUid);
+      if (tab) {
+        tab.label = label;
+      }
     }
   }
 });
@@ -188,7 +200,9 @@ export const {
   closeAllWorkspaceTabs,
   reorderWorkspaceTabs,
   initializeWorkspaceTabs,
-  setActiveWorkspaceTab
+  setActiveWorkspaceTab,
+  addRequestTab,
+  updateRequestTabLabel
 } = workspaceTabsSlice.actions;
 
 export default workspaceTabsSlice.reducer;

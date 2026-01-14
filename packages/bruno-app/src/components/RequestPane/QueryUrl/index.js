@@ -16,6 +16,7 @@ import { saveRequest, cancelRequest } from 'providers/ReduxStore/slices/collecti
 import { triggerSaveTransientModal } from 'providers/ReduxStore/slices/tabs';
 import { getRequestFromCurlCommand } from 'utils/curl';
 import HttpMethodSelector from './HttpMethodSelector';
+import TransientRequestTypeSelector from './TransientRequestTypeSelector';
 import { useTheme } from 'providers/Theme';
 import { IconDeviceFloppy, IconArrowRight, IconCode, IconSquareRoundedX } from '@tabler/icons';
 import SingleLineEditor from 'components/SingleLineEditor';
@@ -33,10 +34,23 @@ const QueryUrl = ({ item, collection, handleRun }) => {
   const isMac = isMacOS();
   const saveShortcut = isMac ? 'Cmd + S' : 'Ctrl + S';
   const editorRef = useRef(null);
+  const prevItemUid = useRef(null);
   const isLoading = ['queued', 'sending'].includes(item.requestState);
 
   const [generateCodeItemModalOpen, setGenerateCodeItemModalOpen] = useState(false);
   const hasChanges = useMemo(() => hasRequestChanges(item), [item]);
+
+  // Auto-focus URL bar when a new request is created (empty URL)
+  useEffect(() => {
+    if (item?.uid !== prevItemUid.current) {
+      prevItemUid.current = item?.uid;
+      if (!url && editorRef.current?.editor) {
+        setTimeout(() => {
+          editorRef.current?.editor?.focus();
+        }, 50);
+      }
+    }
+  }, [item?.uid, url]);
 
   const onSave = () => {
     if (item.transient) {
@@ -398,9 +412,11 @@ const QueryUrl = ({ item, collection, handleRun }) => {
         />
 
       </div>
+      {item.transient && (
+        <TransientRequestTypeSelector item={item} collection={collection} />
+      )}
       <div className="flex items-center h-full mx-2 gap-3 cursor-pointer" id="send-request" onClick={handleRun}>
         <div
-          title="Generate Code"
           className="infotip"
           onClick={(e) => {
             handleGenerateCode(e);
@@ -410,7 +426,6 @@ const QueryUrl = ({ item, collection, handleRun }) => {
           <span className="infotiptext text-xs">Generate Code</span>
         </div>
         <div
-          title="Save Request"
           className="infotip"
           onClick={(e) => {
             e.stopPropagation();

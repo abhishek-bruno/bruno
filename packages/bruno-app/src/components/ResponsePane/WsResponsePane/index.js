@@ -90,7 +90,7 @@ const WSResponsePane = ({ item, collection }) => {
   if (!item.response && !requestTimeline?.length) {
     return (
       <StyledWrapper className="flex h-full relative">
-        <Placeholder />
+        <Placeholder item={item} collection={collection} />
       </StyledWrapper>
     );
   }

@@ -33,6 +33,8 @@ import WSResponsePane from 'components/ResponsePane/WsResponsePane';
 import { useTabPaneBoundaries } from 'hooks/useTabPaneBoundaries/index';
 import ResponseExample from 'components/ResponseExample';
 import WorkspaceHome from 'components/WorkspaceHome';
+import WorkspaceOverview from 'components/WorkspaceHome/WorkspaceOverview';
+import WorkspaceEnvironments from 'components/WorkspaceHome/WorkspaceEnvironments';
 import EnvironmentSettings from 'components/Environments/EnvironmentSettings';
 import GlobalEnvironmentSettings from 'components/Environments/GlobalEnvironmentSettings';
 
@@ -48,7 +50,14 @@ const RequestTabPanel = () => {
   const dispatch = useDispatch();
   const tabs = useSelector((state) => state.tabs.tabs);
   const activeTabUid = useSelector((state) => state.tabs.activeTabUid);
-  const focusedTab = find(tabs, (t) => t.uid === activeTabUid);
+  const activeWorkspaceUid = useSelector((state) => state.workspaces.activeWorkspaceUid);
+
+  // Filter tabs to only show tabs from the current workspace
+  // Tabs without workspaceUid are considered to belong to all workspaces (backward compatibility)
+  const workspaceTabs = tabs.filter((t) => !t.workspaceUid || t.workspaceUid === activeWorkspaceUid);
+
+  // Only focus on tabs within the current workspace
+  const focusedTab = find(workspaceTabs, (t) => t.uid === activeTabUid);
   const { globalEnvironments, activeGlobalEnvironmentUid } = useSelector((state) => state.globalEnvironments);
   const _collections = useSelector((state) => state.collections.collections);
   const preferences = useSelector((state) => state.app.preferences);
@@ -176,6 +185,24 @@ const RequestTabPanel = () => {
 
   if (focusedTab.type === 'global-environment-settings') {
     return <GlobalEnvironmentSettings />;
+  }
+
+  // Workspace-specific tab types for virtual collections (Scratchpad)
+  if (focusedTab.type === 'workspace-overview') {
+    return <WorkspaceOverview />;
+  }
+
+  if (focusedTab.type === 'workspace-git') {
+    return (
+      <div className="p-4">
+        <h2 className="text-lg font-medium mb-4">Git</h2>
+        <p className="text-muted">Git integration coming soon...</p>
+      </div>
+    );
+  }
+
+  if (focusedTab.type === 'workspace-environments') {
+    return <WorkspaceEnvironments />;
   }
 
   if (!focusedTab.uid || !focusedTab.collectionUid) {

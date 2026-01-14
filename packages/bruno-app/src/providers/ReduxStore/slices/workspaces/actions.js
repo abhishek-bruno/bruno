@@ -8,11 +8,10 @@ import {
   removeCollectionFromWorkspace,
   updateWorkspaceLoadingState
 } from '../workspaces';
-import { showHomePage } from '../app';
 import { createCollection, openCollection, openMultipleCollections } from '../collections/actions';
-import { removeCollection } from '../collections';
+import { removeCollection, createOrGetVirtualCollection } from '../collections';
 import { updateGlobalEnvironments } from '../global-environments';
-import { initializeWorkspaceTabs, setActiveWorkspaceTab } from '../workspaceTabs';
+import { switchWorkspaceContext } from '../tabs';
 import { normalizePath } from 'utils/common/path';
 import toast from 'react-hot-toast';
 
@@ -237,6 +236,15 @@ export const loadWorkspaceApiSpecs = (workspaceUid) => {
 
 export const switchWorkspace = (workspaceUid) => {
   return async (dispatch, getState) => {
+    const state = getState();
+    const previousWorkspaceUid = state.workspaces.activeWorkspaceUid;
+
+    // Switch workspace context in tabs (save current workspace's active tab, restore target's)
+    dispatch(switchWorkspaceContext({
+      fromWorkspaceUid: previousWorkspaceUid,
+      toWorkspaceUid: workspaceUid
+    }));
+
     dispatch(setActiveWorkspace(workspaceUid));
 
     const workspace = getState().workspaces.workspaces.find((w) => w.uid === workspaceUid);
@@ -263,14 +271,9 @@ export const switchWorkspace = (workspaceUid) => {
     }
 
     await loadWorkspaceCollectionsForSwitch(dispatch, workspace);
-    dispatch(showHomePage());
 
-    const permanentTabs = [
-      { type: 'overview', label: 'Overview' },
-      { type: 'environments', label: 'Global Environments' }
-    ];
-    dispatch(initializeWorkspaceTabs({ workspaceUid, permanentTabs }));
-    dispatch(setActiveWorkspaceTab({ workspaceUid, type: 'overview' }));
+    // Create/get virtual collection
+    dispatch(createOrGetVirtualCollection({ workspaceUid, workspaceName: workspace.name }));
   };
 };
 

@@ -1,255 +1,201 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { IconCategory, IconDots, IconEdit, IconX, IconCheck, IconFolder, IconUpload } from '@tabler/icons';
-import { renameWorkspaceAction, exportWorkspaceAction } from 'providers/ReduxStore/slices/workspaces/actions';
-import { showInFolder } from 'providers/ReduxStore/slices/collections/actions';
+import { IconPlus, IconFolder, IconDownload, IconFolderPlus, IconHome, IconWorld, IconGitBranch } from '@tabler/icons';
+import { newStandaloneTransientRequest } from 'providers/ReduxStore/slices/collections/actions';
+import { importCollection, openCollection } from 'providers/ReduxStore/slices/collections/actions';
+import { createOrGetVirtualCollection } from 'providers/ReduxStore/slices/collections';
+import { addTab } from 'providers/ReduxStore/slices/tabs';
 import toast from 'react-hot-toast';
-import CloseWorkspace from 'components/Sidebar/CloseWorkspace';
-import WorkspaceOverview from './WorkspaceOverview';
-import WorkspaceEnvironments from './WorkspaceEnvironments';
-import WorkspaceTabs from 'components/WorkspaceTabs';
+import CreateCollection from 'components/Sidebar/CreateCollection';
+import ImportCollection from 'components/Sidebar/ImportCollection';
+import ImportCollectionLocation from 'components/Sidebar/ImportCollectionLocation';
 import StyledWrapper from './StyledWrapper';
 import Dropdown from 'components/Dropdown';
 import { getRevealInFolderLabel } from 'utils/common/platform';
 import { getWorkspaceDisplayName } from 'components/AppTitleBar';
 import classNames from 'classnames';
 
+/**
+ * WorkspaceHome is shown as an empty state when no tabs are open.
+ * It displays a VS Code-style empty state with quick actions.
+ */
 const WorkspaceHome = () => {
   const dispatch = useDispatch();
   const { workspaces, activeWorkspaceUid } = useSelector((state) => state.workspaces);
-  const workspaceTabs = useSelector((state) => state.workspaceTabs);
-  const activeTabUid = workspaceTabs.activeTabUid;
-  const activeTab = workspaceTabs.tabs.find((t) => t.uid === activeTabUid);
-
-  const [isRenamingWorkspace, setIsRenamingWorkspace] = useState(false);
-  const [workspaceNameInput, setWorkspaceNameInput] = useState('');
-  const [workspaceNameError, setWorkspaceNameError] = useState('');
-  const [closeWorkspaceModalOpen, setCloseWorkspaceModalOpen] = useState(false);
-  const workspaceNameInputRef = useRef(null);
-  const workspaceRenameContainerRef = useRef(null);
-  const dropdownTippyRef = useRef();
-  const onDropdownCreate = (ref) => (dropdownTippyRef.current = ref);
-
   const activeWorkspace = workspaces.find((w) => w.uid === activeWorkspaceUid);
 
-  useEffect(() => {
-    if (!isRenamingWorkspace) return;
-
-    const handleClickOutside = (event) => {
-      if (workspaceRenameContainerRef.current && !workspaceRenameContainerRef.current.contains(event.target)) {
-        handleCancelWorkspaceRename();
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isRenamingWorkspace]);
+  const [createCollectionModalOpen, setCreateCollectionModalOpen] = useState(false);
+  const [importCollectionModalOpen, setImportCollectionModalOpen] = useState(false);
+  const [importCollectionLocationModalOpen, setImportCollectionLocationModalOpen] = useState(false);
+  const [importData, setImportData] = useState(null);
 
   if (!activeWorkspace) {
-    return null;
+    return (
+      <StyledWrapper className="h-full flex items-center justify-center">
+        <p className="text-muted">No workspace selected</p>
+      </StyledWrapper>
+    );
   }
 
-  const handleRenameWorkspaceClick = () => {
-    dropdownTippyRef.current?.hide();
-    setIsRenamingWorkspace(true);
-    setWorkspaceNameInput(activeWorkspace.name);
-    setWorkspaceNameError('');
-    setTimeout(() => {
-      workspaceNameInputRef.current?.focus();
-      workspaceNameInputRef.current?.select();
-    }, 50);
-  };
-
-  const handleCloseWorkspaceClick = () => {
-    dropdownTippyRef.current?.hide();
-    if (activeWorkspace.type === 'default') {
-      toast.error('Cannot close the default workspace');
-      return;
-    }
-    setCloseWorkspaceModalOpen(true);
-  };
-
-  const handleShowInFolder = () => {
-    dropdownTippyRef.current?.hide();
-    if (activeWorkspace.pathname) {
-      dispatch(showInFolder(activeWorkspace.pathname)).catch((error) => {
-        toast.error('Error opening the folder');
-      });
+  const handleNewRequest = () => {
+    if (activeWorkspaceUid) {
+      dispatch(newStandaloneTransientRequest({ workspaceUid: activeWorkspaceUid }));
     }
   };
 
-  const handleExportWorkspace = () => {
-    dropdownTippyRef.current?.hide();
-    dispatch(exportWorkspaceAction(activeWorkspace.uid))
-      .then((result) => {
-        if (!result.canceled) {
-          toast.success('Workspace exported successfully');
-        }
-      })
-      .catch((error) => {
-        toast.error(error?.message || 'Error exporting workspace');
-      });
+  const handleOpenOverview = () => {
+    if (activeWorkspaceUid && activeWorkspace) {
+      const virtualCollectionUid = `virtual-${activeWorkspaceUid}`;
+      dispatch(createOrGetVirtualCollection({ workspaceUid: activeWorkspaceUid, workspaceName: activeWorkspace.name }));
+      dispatch(addTab({
+        uid: `${virtualCollectionUid}-overview`,
+        collectionUid: virtualCollectionUid,
+        type: 'workspace-overview',
+        workspaceUid: activeWorkspaceUid
+      }));
+    }
   };
 
-  const validateWorkspaceName = (name) => {
-    if (!name || name.trim() === '') {
-      return 'Name is required';
+  const handleOpenGlobalEnvironments = () => {
+    if (activeWorkspaceUid && activeWorkspace) {
+      const virtualCollectionUid = `virtual-${activeWorkspaceUid}`;
+      dispatch(createOrGetVirtualCollection({ workspaceUid: activeWorkspaceUid, workspaceName: activeWorkspace.name }));
+      dispatch(addTab({
+        uid: `${virtualCollectionUid}-environments`,
+        collectionUid: virtualCollectionUid,
+        type: 'workspace-environments',
+        workspaceUid: activeWorkspaceUid
+      }));
     }
-    if (name.length < 1) {
-      return 'Must be at least 1 character';
-    }
-    if (name.length > 255) {
-      return 'Must be 255 characters or less';
-    }
-    return null;
   };
 
-  const handleSaveWorkspaceRename = () => {
-    const error = validateWorkspaceName(workspaceNameInput);
-    if (error) {
-      setWorkspaceNameError(error);
+  const handleOpenGit = () => {
+    if (activeWorkspaceUid && activeWorkspace) {
+      const virtualCollectionUid = `virtual-${activeWorkspaceUid}`;
+      dispatch(createOrGetVirtualCollection({ workspaceUid: activeWorkspaceUid, workspaceName: activeWorkspace.name }));
+      dispatch(addTab({
+        uid: `${virtualCollectionUid}-git`,
+        collectionUid: virtualCollectionUid,
+        type: 'workspace-git',
+        workspaceUid: activeWorkspaceUid
+      }));
+    }
+  };
+
+  const handleCreateCollection = async () => {
+    if (!activeWorkspace?.pathname) {
+      toast.error('Workspace path not found');
       return;
     }
 
-    dispatch(renameWorkspaceAction(activeWorkspace.uid, workspaceNameInput))
+    try {
+      const { ipcRenderer } = window;
+      await ipcRenderer.invoke('renderer:ensure-collections-folder', activeWorkspace.pathname);
+      setCreateCollectionModalOpen(true);
+    } catch (error) {
+      console.error('Error ensuring collections folder exists:', error);
+      toast.error('Error preparing workspace for collection creation');
+    }
+  };
+
+  const handleOpenCollection = () => {
+    dispatch(openCollection()).catch((err) => {
+      console.error(err);
+      toast.error('An error occurred while opening the collection');
+    });
+  };
+
+  const handleImportCollection = () => {
+    setImportCollectionModalOpen(true);
+  };
+
+  const handleImportCollectionSubmit = ({ rawData, type }) => {
+    setImportCollectionModalOpen(false);
+    setImportData({ rawData, type });
+    setImportCollectionLocationModalOpen(true);
+  };
+
+  const handleImportCollectionLocation = (convertedCollection, collectionLocation, options = {}) => {
+    dispatch(importCollection(convertedCollection, collectionLocation, options))
       .then(() => {
-        toast.success('Workspace renamed!');
-        setIsRenamingWorkspace(false);
-        setWorkspaceNameInput('');
-        setWorkspaceNameError('');
+        setImportCollectionLocationModalOpen(false);
+        setImportData(null);
+        toast.success('Collection imported successfully');
       })
       .catch((err) => {
-        toast.error(err?.message || 'An error occurred while renaming the workspace');
-        setWorkspaceNameError(err?.message || 'Failed to rename workspace');
+        console.error(err);
+        toast.error(err.message);
       });
-  };
-
-  const handleCancelWorkspaceRename = () => {
-    setIsRenamingWorkspace(false);
-    setWorkspaceNameInput('');
-    setWorkspaceNameError('');
-  };
-
-  const handleWorkspaceNameChange = (e) => {
-    setWorkspaceNameInput(e.target.value);
-    if (workspaceNameError) {
-      setWorkspaceNameError('');
-    }
-  };
-
-  const handleWorkspaceNameKeyDown = (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      handleSaveWorkspaceRename();
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      handleCancelWorkspaceRename();
-    }
-  };
-
-  const renderTabContent = () => {
-    if (!activeTab) return null;
-
-    switch (activeTab.type) {
-      case 'overview':
-        return <WorkspaceOverview workspace={activeWorkspace} />;
-      case 'environments':
-        return <WorkspaceEnvironments workspace={activeWorkspace} />;
-      default:
-        return null;
-    }
   };
 
   return (
     <StyledWrapper className="h-full">
-      <div className="h-full flex flex-row">
-        {closeWorkspaceModalOpen && (
-          <CloseWorkspace
-            workspaceUid={activeWorkspace.uid}
-            onClose={() => setCloseWorkspaceModalOpen(false)}
-          />
-        )}
+      {createCollectionModalOpen && (
+        <CreateCollection onClose={() => setCreateCollectionModalOpen(false)} />
+      )}
 
-        <div className="main-content">
-          <div className="workspace-header">
-            <div className="workspace-title">
-              <IconCategory size={20} strokeWidth={1.5} />
-              {isRenamingWorkspace ? (
-                <div className="workspace-rename-container" ref={workspaceRenameContainerRef}>
-                  <input
-                    ref={workspaceNameInputRef}
-                    type="text"
-                    className="workspace-name-input"
-                    value={workspaceNameInput}
-                    onChange={handleWorkspaceNameChange}
-                    onKeyDown={handleWorkspaceNameKeyDown}
-                    autoComplete="off"
-                    autoCorrect="off"
-                    autoCapitalize="off"
-                    spellCheck="false"
-                  />
-                  <div className="inline-actions">
-                    <button
-                      className="inline-action-btn save"
-                      onClick={handleSaveWorkspaceRename}
-                      onMouseDown={(e) => e.preventDefault()}
-                      title="Save"
-                    >
-                      <IconCheck size={14} strokeWidth={2} />
-                    </button>
-                    <button
-                      className="inline-action-btn cancel"
-                      onClick={handleCancelWorkspaceRename}
-                      onMouseDown={(e) => e.preventDefault()}
-                      title="Cancel"
-                    >
-                      <IconX size={14} strokeWidth={2} />
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <span className={classNames('workspace-name', { 'italic text-muted': !activeWorkspace?.name })}>{getWorkspaceDisplayName(activeWorkspace.name)}</span>
-              )}
+      {importCollectionModalOpen && (
+        <ImportCollection
+          onClose={() => setImportCollectionModalOpen(false)}
+          handleSubmit={handleImportCollectionSubmit}
+        />
+      )}
+
+      {importCollectionLocationModalOpen && importData && (
+        <ImportCollectionLocation
+          rawData={importData.rawData}
+          format={importData.type}
+          onClose={() => setImportCollectionLocationModalOpen(false)}
+          handleSubmit={handleImportCollectionLocation}
+        />
+      )}
+
+      <div className="empty-state">
+        <div className="empty-state-content">
+          <h2 className="empty-state-title">{activeWorkspace.name}</h2>
+          <p className="empty-state-subtitle">Get started by creating a new request or opening a collection</p>
+
+          <div className="empty-state-sections">
+            <div className="empty-state-section">
+              <div className="section-title">Workspace</div>
+              <div className="section-actions">
+                <button className="empty-state-btn" onClick={handleOpenOverview}>
+                  <IconHome size={16} strokeWidth={1.5} />
+                  <span>Overview</span>
+                </button>
+                <button className="empty-state-btn" onClick={handleOpenGlobalEnvironments}>
+                  <IconWorld size={16} strokeWidth={1.5} />
+                  <span>Global Environments</span>
+                </button>
+                <button className="empty-state-btn" onClick={handleOpenGit}>
+                  <IconGitBranch size={16} strokeWidth={1.5} />
+                  <span>Git</span>
+                </button>
+              </div>
             </div>
 
-            {!isRenamingWorkspace && activeWorkspace.type !== 'default' && (
-              <Dropdown
-                style="new"
-                placement="bottom-end"
-                onCreate={onDropdownCreate}
-                icon={<IconDots size={18} strokeWidth={1.5} className="cursor-pointer" />}
-              >
-                <div className="workspace-menu-dropdown">
-                  <div className="dropdown-item" onClick={handleRenameWorkspaceClick}>
-                    <IconEdit size={16} strokeWidth={1.5} />
-                    <span>Rename</span>
-                  </div>
-                  <div className="dropdown-item" onClick={handleShowInFolder}>
-                    <IconFolder size={16} strokeWidth={1.5} />
-                    <span>{getRevealInFolderLabel()}</span>
-                  </div>
-                  <div className="dropdown-item" onClick={handleExportWorkspace}>
-                    <IconUpload size={16} strokeWidth={1.5} />
-                    <span>Export</span>
-                  </div>
-                  <div className="dropdown-item" onClick={handleCloseWorkspaceClick}>
-                    <IconX size={16} strokeWidth={1.5} />
-                    <span>Close</span>
-                  </div>
-                </div>
-              </Dropdown>
-            )}
-
-            {workspaceNameError && isRenamingWorkspace && (
-              <div className="workspace-error">{workspaceNameError}</div>
-            )}
+            <div className="empty-state-section">
+              <div className="section-title">Quick Actions</div>
+              <div className="section-actions">
+                <button className="empty-state-btn" onClick={handleNewRequest}>
+                  <IconPlus size={16} strokeWidth={1.5} />
+                  <span>New Request</span>
+                </button>
+                <button className="empty-state-btn" onClick={handleCreateCollection}>
+                  <IconFolderPlus size={16} strokeWidth={1.5} />
+                  <span>New Collection</span>
+                </button>
+                <button className="empty-state-btn" onClick={handleOpenCollection}>
+                  <IconFolder size={16} strokeWidth={1.5} />
+                  <span>Open Collection</span>
+                </button>
+                <button className="empty-state-btn" onClick={handleImportCollection}>
+                  <IconDownload size={16} strokeWidth={1.5} />
+                  <span>Import Collection</span>
+                </button>
+              </div>
+            </div>
           </div>
-
-          <WorkspaceTabs workspaceUid={activeWorkspace.uid} />
-
-          <div className="tab-content">{renderTabContent()}</div>
         </div>
       </div>
     </StyledWrapper>

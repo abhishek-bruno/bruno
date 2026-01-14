@@ -3281,6 +3281,47 @@ export const collectionsSlice = createSlice({
         }
       }
     },
+    // Virtual collection for standalone transient requests (not tied to a real collection)
+    createOrGetVirtualCollection: (state, action) => {
+      const { workspaceUid, workspaceName } = action.payload;
+      const virtualCollectionUid = `virtual-${workspaceUid}`;
+      const collectionName = workspaceName || 'Workspace';
+
+      // Check if virtual collection already exists
+      let virtualCollection = findCollectionByUid(state.collections, virtualCollectionUid);
+
+      if (!virtualCollection) {
+        // Create a new virtual collection
+        virtualCollection = {
+          uid: virtualCollectionUid,
+          name: collectionName,
+          pathname: null, // No filesystem path - this is virtual
+          virtual: true, // Mark as virtual collection
+          items: [],
+          transientItems: [],
+          environments: [],
+          brunoConfig: {
+            version: '1',
+            name: collectionName,
+            type: 'collection'
+          },
+          root: {},
+          settingsSelectedTab: 'overview',
+          folderLevelSettingsSelectedTab: {},
+          allTags: [],
+          mountStatus: 'mounted',
+          format: 'bru',
+          importedAt: new Date().getTime(),
+          lastAction: null,
+          workspaceUid
+        };
+        state.collections.push(virtualCollection);
+      } else {
+        // Update the name if workspace name changed
+        virtualCollection.name = collectionName;
+        virtualCollection.brunoConfig.name = collectionName;
+      }
+    },
     runWsRequestEvent: (state, action) => {
       const { itemUid, collectionUid, eventType, eventData } = action.payload;
       const collection = findCollectionByUid(state.collections, collectionUid);
@@ -3621,6 +3662,7 @@ export const {
   removeTransientItem,
   updateTransientItemDraft,
   deleteTransientItemDraft,
+  createOrGetVirtualCollection,
   runWsRequestEvent,
   wsResponseReceived,
   wsUpdateResponseSortOrder,

@@ -1,7 +1,7 @@
 import { createSlice } from '@reduxjs/toolkit';
 import filter from 'lodash/filter';
 import brunoClipboard from 'utils/bruno-clipboard';
-import { addTab, focusTab } from './tabs';
+import { addTab, focusTab, switchCollectionContext } from './tabs';
 
 const initialState = {
   isDragging: false,
@@ -39,6 +39,9 @@ const initialState = {
     autoSave: {
       enabled: false,
       interval: 1000
+    },
+    standaloneRequest: {
+      lastUsedType: 'http-request'
     }
   },
   generateCode: {
@@ -121,6 +124,12 @@ export const appSlice = createSlice({
         ...action.payload
       };
     },
+    updateStandaloneRequestType: (state, action) => {
+      if (!state.preferences.standaloneRequest) {
+        state.preferences.standaloneRequest = { lastUsedType: 'http-request' };
+      }
+      state.preferences.standaloneRequest.lastUsedType = action.payload.requestType;
+    },
     toggleSidebarCollapse: (state) => {
       state.sidebarCollapsed = !state.sidebarCollapsed;
     },
@@ -164,6 +173,7 @@ export const {
   removeAllTasksFromQueue,
   updateSystemProxyEnvVariables,
   updateGenerateCode,
+  updateStandaloneRequestType,
   toggleSidebarCollapse,
   setClipboard
 } = appSlice.actions;
