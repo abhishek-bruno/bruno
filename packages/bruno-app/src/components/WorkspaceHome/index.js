@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { IconPlus, IconFolder, IconDownload, IconFolderPlus, IconHome, IconWorld, IconGitBranch } from '@tabler/icons';
+import { IconPlus, IconFolder, IconDownload, IconFolderPlus, IconHome, IconWorld } from '@tabler/icons';
 import { newStandaloneTransientRequest } from 'providers/ReduxStore/slices/collections/actions';
 import { importCollection, openCollection } from 'providers/ReduxStore/slices/collections/actions';
 import { createOrGetVirtualCollection } from 'providers/ReduxStore/slices/collections';
@@ -64,19 +64,6 @@ const WorkspaceHome = () => {
         uid: `${virtualCollectionUid}-environments`,
         collectionUid: virtualCollectionUid,
         type: 'workspace-environments',
-        workspaceUid: activeWorkspaceUid
-      }));
-    }
-  };
-
-  const handleOpenGit = () => {
-    if (activeWorkspaceUid && activeWorkspace) {
-      const virtualCollectionUid = `virtual-${activeWorkspaceUid}`;
-      dispatch(createOrGetVirtualCollection({ workspaceUid: activeWorkspaceUid, workspaceName: activeWorkspace.name }));
-      dispatch(addTab({
-        uid: `${virtualCollectionUid}-git`,
-        collectionUid: virtualCollectionUid,
-        type: 'workspace-git',
         workspaceUid: activeWorkspaceUid
       }));
     }
@@ -166,10 +153,6 @@ const WorkspaceHome = () => {
                 <button className="empty-state-btn" onClick={handleOpenGlobalEnvironments}>
                   <IconWorld size={16} strokeWidth={1.5} />
                   <span>Global Environments</span>
-                </button>
-                <button className="empty-state-btn" onClick={handleOpenGit}>
-                  <IconGitBranch size={16} strokeWidth={1.5} />
-                  <span>Git</span>
                 </button>
               </div>
             </div>

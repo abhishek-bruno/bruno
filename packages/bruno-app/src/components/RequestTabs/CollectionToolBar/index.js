@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { uuid } from 'utils/common';
-import { IconBox, IconRun, IconEye, IconSettings, IconCategory, IconChevronDown, IconHome, IconGitBranch, IconWorld } from '@tabler/icons';
+import { IconBox, IconRun, IconEye, IconSettings, IconCategory, IconChevronDown, IconHome, IconWorld } from '@tabler/icons';
 import EnvironmentSelector from 'components/Environments/EnvironmentSelector';
 import { addTab, switchCollectionContext } from 'providers/ReduxStore/slices/tabs';
 import { useDispatch, useSelector } from 'react-redux';
@@ -146,16 +146,6 @@ const CollectionToolBar = ({ collection }) => {
     );
   };
 
-  const openWorkspaceGit = () => {
-    dispatch(
-      addTab({
-        uid: `${collection.uid}-git`,
-        collectionUid: collection.uid,
-        type: 'workspace-git'
-      })
-    );
-  };
-
   const openWorkspaceEnvironments = () => {
     dispatch(
       addTab({
@@ -226,9 +216,6 @@ const CollectionToolBar = ({ collection }) => {
             <>
               <Button variant="filled" color="secondary" size="sm" onClick={openWorkspaceOverview} icon={<IconHome size={14} strokeWidth={1.5} style={{ color: 'hsl(45, 75%, 42%)' }} />}>
                 Overview
-              </Button>
-              <Button variant="filled" color="secondary" size="sm" onClick={openWorkspaceGit} icon={<IconGitBranch size={14} strokeWidth={1.5} style={{ color: 'hsl(45, 75%, 42%)' }} />}>
-                Git
               </Button>
             </>
           ) : (
