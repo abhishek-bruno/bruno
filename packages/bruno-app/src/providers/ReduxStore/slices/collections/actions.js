@@ -61,7 +61,9 @@ import {
   addTransientItem,
   removeTransientItem,
   createOrGetVirtualCollection,
-  collectionAddFileEvent
+  collectionAddFileEvent,
+  toggleCollection,
+  toggleCollectionItem
 } from './index';
 
 import { each } from 'lodash';
@@ -2125,6 +2127,34 @@ export const saveTransientRequest = (params) => (dispatch, getState) => {
 
         // Remove the transient item from the original collection
         dispatch(removeTransientItem({ collectionUid: originalCollectionUid, itemUid }));
+
+        // Expand the collection and all parent folders so the saved item is visible
+        // Get fresh state after all dispatches
+        const freshState = getState();
+        const updatedCollection = findCollectionByUid(freshState.collections.collections, targetCollectionUid);
+        if (updatedCollection) {
+          // Expand the collection if collapsed
+          if (updatedCollection.collapsed) {
+            dispatch(toggleCollection(targetCollectionUid));
+          }
+
+          // Expand all parent folders from the saved item to the collection root
+          // The item was saved under itemUidToSaveUnder (or collection root if not specified)
+          if (itemUidToSaveUnder) {
+            // Find the saved item by pathname and walk up to expand all parent folders
+            const savedItem = findItemInCollection(updatedCollection, itemToSave.uid);
+            let currentFolder = savedItem
+              ? findParentItemInCollection(updatedCollection, savedItem.uid)
+              : findItemInCollection(updatedCollection, itemUidToSaveUnder);
+
+            while (currentFolder?.type === 'folder') {
+              if (currentFolder.collapsed) {
+                dispatch(toggleCollectionItem({ collectionUid: targetCollectionUid, itemUid: currentFolder.uid }));
+              }
+              currentFolder = findParentItemInCollection(updatedCollection, currentFolder.uid);
+            }
+          }
+        }
 
         resolve();
       })

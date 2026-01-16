@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { IconArrowLeft, IconPlus, IconFolder, IconLock, IconDots, IconCategory, IconLogin } from '@tabler/icons';
+import { IconArrowLeft, IconPlus, IconFolder, IconLock, IconDots, IconCategory, IconLogin, IconEdit, IconUpload, IconX } from '@tabler/icons';
 import toast from 'react-hot-toast';
 
-import { switchWorkspace } from 'providers/ReduxStore/slices/workspaces/actions';
+import { switchWorkspace, exportWorkspaceAction } from 'providers/ReduxStore/slices/workspaces/actions';
 import { showInFolder } from 'providers/ReduxStore/slices/collections/actions';
 import { hideManageWorkspacePage } from 'providers/ReduxStore/slices/app';
 import { sortWorkspaces } from 'utils/workspaces';
@@ -57,6 +57,18 @@ const ManageWorkspace = () => {
       return;
     }
     setDeleteWorkspaceModal({ open: true, workspace });
+  };
+
+  const handleExportWorkspace = (workspace) => {
+    dispatch(exportWorkspaceAction(workspace.uid))
+      .then((result) => {
+        if (!result.canceled) {
+          toast.success('Workspace exported successfully');
+        }
+      })
+      .catch((error) => {
+        toast.error(error?.message || 'Error exporting workspace');
+      });
   };
 
   return (
@@ -141,8 +153,9 @@ const ManageWorkspace = () => {
                     <MenuDropdown
                       placement="bottom-end"
                       items={[
-                        { id: 'rename', label: 'Rename', onClick: () => handleRenameClick(workspace) },
-                        { id: 'remove', label: 'Remove', onClick: () => handleCloseClick(workspace) }
+                        { id: 'rename', label: 'Rename', leftSection: IconEdit, onClick: () => handleRenameClick(workspace) },
+                        { id: 'export', label: 'Export', leftSection: IconUpload, onClick: () => handleExportWorkspace(workspace) },
+                        { id: 'remove', label: 'Remove', leftSection: IconX, onClick: () => handleCloseClick(workspace) }
                       ]}
                     >
                       <button className="more-actions-btn">

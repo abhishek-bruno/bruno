@@ -126,11 +126,10 @@ const RequestTabs = () => {
     });
   };
 
-
   return (
     <StyledWrapper>
       <CollectionToolBar collection={activeCollection} />
-      <div className="flex items-center gap-2 pl-2" ref={collectionTabsRef}>
+      <div className="flex items-center gap-2 pl-2" ref={collectionTabsRef} style={{ minHeight: '37.5px ' }}>
         <div className={classnames('scroll-chevrons', { hidden: !showChevrons })}>
           <ActionIcon size="lg" onClick={leftSlide} aria-label="Left Chevron" style={{ marginBottom: '3px' }}>
             <IconChevronLeft size={18} strokeWidth={1.5} />

@@ -2600,12 +2600,16 @@ export const collectionsSlice = createSlice({
           currentSubItems = childItem.items;
         }
 
-        if (file.meta.name != 'folder.bru' && !currentSubItems.find((f) => f.name === file.meta.name)) {
-          // this happens when you rename a file
-          // the add event might get triggered first, before the unlink event
-          // this results in duplicate uids causing react renderer to go mad
-          const currentItem = find(currentSubItems, (i) => i.uid === file.data.uid);
+        if (file.meta.name != 'folder.bru') {
+          // Check by pathname first (most reliable - unique identifier for each file)
+          // This handles the case where manual dispatch and file watcher have different UIDs
+          // Also check by uid for rename scenarios where add event comes before unlink
+          const currentItem = find(currentSubItems, (i) => i.pathname === file.meta.pathname)
+            || find(currentSubItems, (i) => i.uid === file.data.uid);
           if (currentItem) {
+            // Update item properties but preserve the existing UID
+            // This is important because tabs reference items by UID, and we don't want
+            // to orphan tabs when the file watcher sends an event with a different UID
             currentItem.name = file.data.name;
             currentItem.type = file.data.type;
             currentItem.seq = file.data.seq;
