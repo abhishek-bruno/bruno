@@ -166,16 +166,22 @@ const SyncReviewPage = ({
         merged[ep.id] = null;
       }
     });
-    // Local changes default to keep-mine
+    // Local changes default to accept-incoming
     localChanges.forEach((ep) => {
       if (!(ep.id in merged)) {
-        merged[ep.id] = 'keep-mine';
+        merged[ep.id] = 'accept-incoming';
       }
     });
-    // Removed endpoints default to keep-mine (safe default)
+    // Removed endpoints default to accept-incoming
     removedEndpoints.forEach((ep) => {
       if (!(ep.id in merged)) {
-        merged[ep.id] = 'keep-mine';
+        merged[ep.id] = 'accept-incoming';
+      }
+    });
+    // Added endpoints default to accept-incoming
+    addedEndpoints.forEach((ep) => {
+      if (!(ep.id in merged)) {
+        merged[ep.id] = 'accept-incoming';
       }
     });
     return merged;
@@ -193,8 +199,15 @@ const SyncReviewPage = ({
     dispatch(setReviewDecision({ collectionUid, endpointId, decision }));
   };
 
-  const acceptAllIncoming = () => {
+  const acceptAllChanges = () => {
     const newDecisions = {};
+    // Apply to all endpoint types
+    specChanges.forEach((ep) => {
+      newDecisions[ep.id] = 'accept-incoming';
+    });
+    addedEndpoints.forEach((ep) => {
+      newDecisions[ep.id] = 'accept-incoming';
+    });
     conflicts.forEach((ep) => {
       newDecisions[ep.id] = 'accept-incoming';
     });
@@ -209,6 +222,13 @@ const SyncReviewPage = ({
 
   const keepAllMine = () => {
     const newDecisions = {};
+    // Apply to all endpoint types
+    specChanges.forEach((ep) => {
+      newDecisions[ep.id] = 'keep-mine';
+    });
+    addedEndpoints.forEach((ep) => {
+      newDecisions[ep.id] = 'keep-mine';
+    });
     conflicts.forEach((ep) => {
       newDecisions[ep.id] = 'keep-mine';
     });
@@ -222,17 +242,17 @@ const SyncReviewPage = ({
   };
 
   // Derive bulk action active states
-  const allAcceptIncoming = useMemo(() => {
-    const decidable = [...conflicts, ...localChanges, ...removedEndpoints];
+  const allAcceptActive = useMemo(() => {
+    const decidable = [...specChanges, ...addedEndpoints, ...conflicts, ...localChanges, ...removedEndpoints];
     return decidable.length > 0
       && decidable.every((ep) => decisions[ep.id] === 'accept-incoming');
-  }, [conflicts, localChanges, removedEndpoints, decisions]);
+  }, [specChanges, addedEndpoints, conflicts, localChanges, removedEndpoints, decisions]);
 
-  const allKeepMine = useMemo(() => {
-    const decidable = [...conflicts, ...localChanges, ...removedEndpoints];
+  const allKeepActive = useMemo(() => {
+    const decidable = [...specChanges, ...addedEndpoints, ...conflicts, ...localChanges, ...removedEndpoints];
     return decidable.length > 0
       && decidable.every((ep) => decisions[ep.id] === 'keep-mine');
-  }, [conflicts, localChanges, removedEndpoints, decisions]);
+  }, [specChanges, addedEndpoints, conflicts, localChanges, removedEndpoints, decisions]);
 
   // Stats — collection-level outcome counts with endpoint lists for hover
   const updatingEndpoints = useMemo(() => [
@@ -240,7 +260,10 @@ const SyncReviewPage = ({
     ...conflicts.filter((ep) => decisions[ep.id] === 'accept-incoming'),
     ...localChanges.filter((ep) => decisions[ep.id] === 'accept-incoming')
   ], [specChanges, conflicts, localChanges, decisions]);
-  const addingEndpoints = addedEndpoints;
+  const addingEndpoints = useMemo(
+    () => addedEndpoints.filter((ep) => decisions[ep.id] === 'accept-incoming'),
+    [addedEndpoints, decisions]
+  );
   const removingEndpointsList = useMemo(
     () => removedEndpoints.filter((ep) => decisions[ep.id] === 'accept-incoming'),
     [removedEndpoints, decisions]
@@ -258,12 +281,24 @@ const SyncReviewPage = ({
   // Confirmation summary — grouped endpoint lists
   const confirmGroups = useMemo(() => {
     const groups = [];
-    if (addingEndpoints.length > 0) {
-      groups.push({ label: 'New endpoints to add', type: 'add', endpoints: addingEndpoints });
+
+    // Filter by accepted decisions
+    const filteredAdded = addedEndpoints.filter((ep) => decisions[ep.id] === 'accept-incoming');
+    const filteredSpecChanges = specChanges.filter((ep) => decisions[ep.id] === 'accept-incoming');
+
+    if (filteredAdded.length > 0) {
+      groups.push({ label: 'New endpoints to add', type: 'add', endpoints: filteredAdded });
     }
-    if (updatingEndpoints.length > 0) {
-      groups.push({ label: 'Endpoints to update', type: 'update', endpoints: updatingEndpoints });
+
+    const allUpdates = [
+      ...filteredSpecChanges,
+      ...conflicts.filter((ep) => decisions[ep.id] === 'accept-incoming'),
+      ...localChanges.filter((ep) => decisions[ep.id] === 'accept-incoming')
+    ];
+    if (allUpdates.length > 0) {
+      groups.push({ label: 'Endpoints to update', type: 'update', endpoints: allUpdates });
     }
+
     if (removingEndpointsList.length > 0) {
       groups.push({ label: 'Endpoints to delete', type: 'remove', endpoints: removingEndpointsList });
     }
@@ -273,8 +308,20 @@ const SyncReviewPage = ({
     if (retainingEndpoints.length > 0) {
       groups.push({ label: 'Retaining removed endpoints', type: 'keep', endpoints: retainingEndpoints });
     }
+
+    // Add groups for skipped items
+    const skippedAdded = addedEndpoints.filter((ep) => decisions[ep.id] === 'keep-mine');
+    const skippedSpecChanges = specChanges.filter((ep) => decisions[ep.id] === 'keep-mine');
+
+    if (skippedAdded.length > 0) {
+      groups.push({ label: 'Skipped new endpoints', type: 'keep', endpoints: skippedAdded });
+    }
+    if (skippedSpecChanges.length > 0) {
+      groups.push({ label: 'Keeping current version (skipped updates)', type: 'keep', endpoints: skippedSpecChanges });
+    }
+
     return groups;
-  }, [addingEndpoints, updatingEndpoints, removingEndpointsList, keepingLocalEndpoints, retainingEndpoints]);
+  }, [addedEndpoints, specChanges, conflicts, localChanges, removingEndpointsList, keepingLocalEndpoints, retainingEndpoints, decisions]);
 
   const handleApplyClick = () => {
     setShowConfirmation(true);
@@ -282,6 +329,14 @@ const SyncReviewPage = ({
 
   const handleConfirmApply = () => {
     setShowConfirmation(false);
+
+    // Filter based on decisions
+    const filteredAddedEndpoints = addedEndpoints.filter(
+      (ep) => decisions[ep.id] === 'accept-incoming'
+    );
+    const filteredSpecChanges = specChanges.filter(
+      (ep) => decisions[ep.id] === 'accept-incoming'
+    );
 
     // Collect "Not in Spec" endpoints where user chose to remove
     const localOnlyIds = removedEndpoints
@@ -292,9 +347,9 @@ const SyncReviewPage = ({
       endpointDecisions: decisions,
       removedIds: [],
       localOnlyIds,
-      // Pass categorized endpoints for performSync to construct the right backend diff
-      newToCollection: addedEndpoints,
-      specUpdates: specChanges,
+      // Pass filtered categorized endpoints for performSync to construct the right backend diff
+      newToCollection: filteredAddedEndpoints,
+      specUpdates: filteredSpecChanges,
       resolvedConflicts: conflicts.filter((ep) => decisions[ep.id] === 'accept-incoming'),
       localChangesToReset: localChanges.filter((ep) => decisions[ep.id] === 'accept-incoming')
     });
@@ -306,6 +361,9 @@ const SyncReviewPage = ({
   const removedCount = removedEndpoints.length;
   const totalChanges = newCount + updatedCount + removedCount;
 
+  // Smart default expansion: only expand conflicts if they exist, otherwise collapse all
+  const hasConflicts = conflicts.length > 0;
+
   return (
     <div className="sync-review-page">
       <div className="sync-review-header">
@@ -316,21 +374,22 @@ const SyncReviewPage = ({
 
         <div className="title-row">
           <h3 className="review-title">Sync Changes</h3>
-          {/* {totalChanges > 0 && (
-            <div className="review-badges">
-              <div className="badge-row">
-                {newCount > 0 && (
-                  <span className="context-pill added">New in spec: {newCount}</span>
-                )}
-                {updatedCount > 0 && (
-                  <span className="context-pill spec">Updated in spec: {updatedCount}</span>
-                )}
-                {removedCount > 0 && (
-                  <span className="context-pill removed">Removed from spec: {removedCount}</span>
-                )}
-              </div>
+          {totalChanges > 0 && (
+            <div className="bulk-actions">
+              <button
+                className={`bulk-btn ${allAcceptActive ? 'active' : ''}`}
+                onClick={acceptAllChanges}
+              >
+                <IconCheck size={12} /> Accept All From Spec
+              </button>
+              <button
+                className={`bulk-btn ${allKeepActive ? 'active' : ''}`}
+                onClick={keepAllMine}
+              >
+                <IconX size={12} /> Keep All Mine
+              </button>
             </div>
-          )} */}
+          )}
         </div>
 
         {totalChanges > 0 && (
@@ -372,17 +431,16 @@ const SyncReviewPage = ({
             {/* === Incoming from Spec === */}
             {(specChanges.length > 0 || addedEndpoints.length > 0) && (
               <div className="review-group">
-                {/* <h4 className="review-group-title">Incoming from Spec</h4> */}
-
                 <ChangeSection
                   title="Updated in Spec"
-                  // icon={IconRefresh}
                   count={specChanges.length}
                   type="spec-modified"
                   endpoints={specChanges}
-                  defaultExpanded={true}
-                  subtitle="These endpoints will be updated in your collection on sync"
-                  expandable={true}
+                  defaultExpanded={false}
+                  subtitle="Endpoints with updates from the spec"
+                  reviewMode={true}
+                  decisions={decisions}
+                  onDecisionChange={handleDecisionChange}
                   collectionPath={collectionPath}
                   newSpec={newSpec}
                   collectionUid={collectionUid}
@@ -391,13 +449,15 @@ const SyncReviewPage = ({
 
                 <ChangeSection
                   title="New in Spec"
-                  // icon={IconPlus}
                   count={addedEndpoints.length}
                   type="added"
                   endpoints={addedEndpoints}
                   defaultExpanded={false}
-                  subtitle="These endpoints will be added to your collection on sync"
-                  expandable={true}
+                  subtitle="New endpoints from the spec"
+                  reviewMode={true}
+                  decisions={decisions}
+                  onDecisionChange={handleDecisionChange}
+                  decisionLabels={{ keep: 'Skip', accept: 'Add' }}
                   collectionPath={collectionPath}
                   newSpec={newSpec}
                   collectionUid={collectionUid}
@@ -409,25 +469,13 @@ const SyncReviewPage = ({
             {/* === Needs Your Decision === */}
             {(conflicts.length > 0 || localChanges.length > 0 || removedEndpoints.length > 0) && (
               <div className="review-group">
-                <div className="review-group-header">
-                  <h4 className="review-group-title">Needs Your Decision</h4>
-                  <div className="bulk-actions">
-                    <button className={`bulk-btn ${allAcceptIncoming ? 'active' : ''}`} onClick={acceptAllIncoming}>
-                      <IconCheck size={12} /> Accept All From Spec
-                    </button>
-                    <button className={`bulk-btn ${allKeepMine ? 'active' : ''}`} onClick={keepAllMine}>
-                      <IconX size={12} /> Keep All Mine
-                    </button>
-                  </div>
-                </div>
-
                 <ChangeSection
                   title="Conflicts"
                   // icon={IconAlertTriangle}
                   count={conflicts.length}
                   type="conflict"
                   endpoints={conflicts}
-                  defaultExpanded={true}
+                  defaultExpanded={hasConflicts}
                   subtitle="You modified these endpoints locally and the spec has updates too — resolve before syncing"
                   reviewMode={true}
                   showSourceBadges={true}
@@ -445,7 +493,7 @@ const SyncReviewPage = ({
                   count={localChanges.length}
                   type="collection-drift"
                   endpoints={localChanges}
-                  defaultExpanded={true}
+                  defaultExpanded={false}
                   subtitle="You modified these endpoints locally — decide whether to keep or reset"
                   reviewMode={true}
                   decisions={decisions}
