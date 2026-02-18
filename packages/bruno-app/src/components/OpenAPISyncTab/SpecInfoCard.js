@@ -187,25 +187,25 @@ const SpecInfoCard = ({
         {footerState.hasButtons === 'remote-drift' && (
           <div className="footer-buttons">
             <Button size="sm" onClick={onReviewAndSync}>Review and Sync Collection</Button>
-            {/* <Button variant="outline" size="sm" onClick={onDiscardAndSync}>Discard Local Changes and Sync Now</Button> */}
+            <Button variant="outline" size="sm" onClick={onDiscardAndSync}>Discard Local Changes and Sync Now</Button>
           </div>
         )}
         {footerState.hasButtons === 'setup' && (
           <div className="footer-buttons">
             <Button size="sm" onClick={onPreviewAndSync}>Review Changes and Sync Collection</Button>
-            {/* <Button variant="outline" size="sm" onClick={onSyncNow}>Skip Review and Sync Collection</Button> */}
+            <Button variant="outline" size="sm" onClick={onSyncNow}>Skip Review and Sync Collection</Button>
           </div>
         )}
         {footerState.hasButtons === 'remote' && (
           <div className="footer-buttons">
             <Button size="sm" onClick={onPreviewAndSync}>Review and Sync Collection</Button>
-            {/* <Button variant="outline" size="sm" onClick={onSyncNow}>Skip Review and Sync Now</Button> */}
+            <Button variant="outline" size="sm" onClick={onSyncNow}>Skip Review and Sync Now</Button>
           </div>
         )}
         {footerState.hasButtons === 'drift' && (
           <div className="footer-buttons">
             <Button size="sm" onClick={onViewLocalChanges}>View Local Changes</Button>
-            {/* <Button variant="outline" size="sm" onClick={onResetAllModified}>Discard Local Changes</Button> */}
+            <Button variant="outline" size="sm" onClick={onResetAllModified}>Discard Local Changes</Button>
           </div>
         )}
         {footerState.hasButtons === 'spec-only' && (
