@@ -306,6 +306,9 @@ const CollectionsSection = () => {
         <ImportCollectionLocation
           rawData={importData.rawData}
           format={importData.type}
+          sourceUrl={importData.sourceUrl}
+          filePath={importData.filePath}
+          rawContent={importData.rawContent}
           onClose={() => setImportCollectionLocationModalOpen(false)}
           handleSubmit={handleImportCollectionLocation}
         />
