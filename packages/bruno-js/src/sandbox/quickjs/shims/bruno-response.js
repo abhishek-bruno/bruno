@@ -1,8 +1,41 @@
 const { marshallToVm } = require('../utils');
 
 const addBrunoResponseShimToContext = (vm, res) => {
-  let resFn = vm.newFunction('res', function (exprStr) {
-    return marshallToVm(res(vm.dump(exprStr)), vm);
+  // Support response query filtering: res('path[?].prop', filterFn)
+  // Args beyond the expression string are filter/mapper functions or object predicates
+  // used by @usebruno/query's get() for [?] array filtering syntax.
+  // Each QuickJS function handle is wrapped into a native JS function that
+  // marshalls data across the VM boundary (native → QuickJS → native).
+  let resFn = vm.newFunction('res', function (...args) {
+    const expr = vm.dump(args[0]);
+
+    const fns = [];
+    for (let i = 1; i < args.length; i++) {
+      const arg = args[i];
+      if (vm.typeof(arg) === 'function') {
+        // Wrap QuickJS function handle as a native callback.
+        // Safe because get() invokes filters synchronously,
+        // so the borrowed arg handle is still valid.
+        fns.push((item) => {
+          const vmItem = marshallToVm(item, vm);
+          const result = vm.callFunction(arg, vm.global, vmItem);
+          vmItem.dispose();
+          if (result.error) {
+            const error = vm.dump(result.error);
+            result.error.dispose();
+            throw new Error(typeof error === 'string' ? error : error.message || 'Filter function error');
+          }
+          const value = vm.dump(result.value);
+          result.value.dispose();
+          return value;
+        });
+      } else {
+        // Object predicate, e.g. res('items[?]', { id: 'test' })
+        fns.push(vm.dump(arg));
+      }
+    }
+
+    return marshallToVm(res(expr, ...fns), vm);
   });
 
   const status = marshallToVm(res?.status, vm);
